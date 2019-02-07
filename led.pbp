@@ -1,0 +1,106 @@
+;=============================================================================
+; Code to handle the on-board LEDs
+;=============================================================================
+LED_COUNT   con 4
+LED        var PORTB.1  ; treated as an array of bits LED[0]...LED[3]
+
+LED_SWITCHMOTOR_BUTTON  con 0
+LED_ONBOARD_BUTTON      con 1
+LED_LOCONET_PKT         con 2
+LED_DEBUG               con 3
+
+led_to_change var byte
+    ; set led_to_change before calling led_on, led_off, led_flash, and led_blink.
+    ; valid values are 0 through LED_COUNT-1
+
+L   var byte    ; loop index variable
+
+led_flash_count var byte[LED_COUNT] ; keep track of the LEDs that are being flashed
+
+#ifdef LED_BLINK
+led_blinking    var byte[LED_COUNT] ; keep track of the LEDs that are being blinked
+#endif
+
+;=============================================================================
+led_initialize:
+    ; all LEDs off
+     LED[0] = 1
+     LED[1] = 1
+     LED[2] = 1
+     LED[3] = 1
+    return
+
+;=============================================================================
+#ifdef LED_ON_OFF
+
+led_on:
+    LED[led_to_change] = 0
+    return
+
+#endif
+
+;=============================================================================
+#ifdef LED_ON_OFF
+
+led_off:
+#ifdef LED_BLINK
+    led_blinking[led_to_change] = 0
+#endif
+    LED[led_to_change] = 1
+    return
+
+#endif
+
+;=============================================================================
+; led_flash - flash the LED once
+;
+led_flash:
+    led_flash_count[led_to_change] = 10  ; number of timer ticks to leave LED on
+    LED[led_to_change] = 0
+    return
+
+;=============================================================================
+#ifdef LED_BLINK
+
+; led_blink - repeatedly blink the LED until led_off is called
+led_blink:
+    led_blinking[led_to_change] = 1
+    LED[led_to_change] = 0
+    return
+
+#endif
+
+;=============================================================================
+; led_check should be called each time timer0 expires
+;
+led_check:
+    for L = 0 to LED_COUNT-1
+        ; if LED[L] is being flashed...
+        if led_flash_count[L] then
+            led_flash_count[L] = led_flash_count[L] - 1
+            if led_flash_count[L] = 0 then
+                LED[L] = 1  ; turn off LED
+            endif
+        endif
+#ifdef LED_BLINK
+        ; if LED[L] is being blinked...
+        if led_blinking[L] then
+            ; toggle LED every $20 timer ticks
+            if (led_blinking[L] & $1f) = 0 then 
+                if LED[L] then
+                    LED[L] = 0 ; turn on LED
+                else
+                    LED[L] = 1 ; turn off LED
+                endif
+            endif
+            led_blinking[L] = led_blinking[L] + 1
+            ; don't let led_blinking[L] roll-over to zero as a result 
+            ; of the above increment since zero means it's not being blinked
+            if led_blinking[L] = 0 then led_blinking[L] = 1
+        endif
+#endif
+    next L
+    return
+
+;=============================================================================
+

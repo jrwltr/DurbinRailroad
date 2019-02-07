@@ -1,0 +1,490 @@
+;=============================================================================
+; This code manipulates banks of switch motors.  A bank is a collection of 
+; 5 switch motors connected via one PCF8574 and one PCF8574A.
+;=============================================================================
+
+SW_INTERFACE_I2C_CLK  var SCL1
+SW_INTERFACE_I2C_DATA var SDA1
+
+PCF8574_BASE_ADDRESS        con $40
+PCF8574A_BASE_ADDRESS       con $70
+
+I2C_INTERFACE_COUNT         con 3   ; number I2C channels that connect to switch motor banks
+BANKS_PER_INTERFACE         con 8   ; number of switch motor banks per I2C channel
+SWITCH_MOTORS_PER_BANK      con 5   ; number of switch motors per motor bank
+
+SWITCH_MOTOR_COUNT          con 120 ;(I2C_INTERFACE_COUNT * BANKS_PER_INTERFACE * SWITCH_MOTORS_PER_BANK)
+    ; number of possible switch motors in the system
+
+TRANSLATE_TABLE_EEPROM_ADDRESS      con 0
+SWITCH_MOTOR_STATE_EEPROM_ADDRESS   con 240 ;SWITCH_MOTOR_COUNT * 2
+ROUTE_TABLE_EEPROM_ADDRESS          con 264 ;SWITCH_MOTOR_STATE_EEPROM_ADDRESS+(I2C_INTERFACE_COUNT * BANKS_PER_INTERFACE)
+
+;=============================================================================
+last_motor_button_state var bit[SWITCH_MOTOR_COUNT]
+    ; keeps track of whether each button was pressed or
+    ; released when last debounced
+
+;=============================================================================
+interface_debounce    var byte[I2C_INTERFACE_COUNT]
+
+switch_motor_to_throw var byte
+
+;=============================================================================
+; "local" variables
+k               var byte
+i2c_read_value  var byte    ; last value read from I2C
+i2c_write_value var byte    ; value to be written to I2C
+interface_index var byte
+bank_index      var byte
+switch_index    var byte
+i2c_addr        var byte
+
+MAX_ROUTES          con 50
+MAX_ROUTE_SWITCHES  con 40
+ROUTE_STORAGE_SIZE  con 42   ; MAX_ROUTE_SWITCHES + 2
+ROUTE_TABLE_SIZE    con 2000 ; MAX_ROUTES * ROUTE_STORAGE_SIZE
+
+;=============================================================================
+route_num_routes    var byte
+route_number        var word    ; set this before calling route_activate, etc
+
+route_to_find       var word    ; set this before calling route_find
+route_found         var word
+ROUTE_NOT_FOUND con $ffff
+
+route_eeaddr        var word
+
+route_switches      var byte[MAX_ROUTE_SWITCHES]
+route_num_switches  var byte
+route_switch_index  var byte
+
+;=============================================================================
+switch_motor_map_delete:
+    for k = 0 to (SWITCH_MOTOR_COUNT-1)
+        ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS + (k * 2)
+        gosub eeprom_read_word
+        if ee_word == loconet_switch then
+            ee_word = $ffff
+            gosub eeprom_write_word
+            exit
+        endif
+    next k
+    loconet_sw_motor = $ffff
+    return
+
+;=============================================================================
+switch_motor_state  var byte
+switch_motor_read:
+    ee_bit  var byte
+    ee_address = SWITCH_MOTOR_STATE_EEPROM_ADDRESS + (switch_motor_to_throw / SWITCH_MOTORS_PER_BANK)
+    ee_bit = 1 << (switch_motor_to_throw // SWITCH_MOTORS_PER_BANK)
+    gosub eeprom_read_byte
+    if (ee_byte & ee_bit) then
+        switch_motor_state = SWITCH_MOTOR_CLOSED
+    else
+        switch_motor_state = SWITCH_MOTOR_THROWN
+    endif
+    return
+
+;=============================================================================
+; before calling switch_motor_write or switch_motor_write_from_eeprom, set switch_motor_to_throw
+switch_motor_write:
+        gosub switch_motor_read
+        if switch_motor_direction = SWITCH_MOTOR_THROWN then
+            ee_byte = ee_byte & ~ee_bit
+        elseif switch_motor_direction = SWITCH_MOTOR_CLOSED then
+            ee_byte = ee_byte |  ee_bit
+        elseif switch_motor_direction = SWITCH_MOTOR_TOGGLE then
+            ee_byte = ee_byte ^  ee_bit
+        endif
+        gosub eeprom_write_byte
+switch_motor_write_from_eeprom:
+        interface_index = switch_motor_to_throw
+        switch_index = interface_index // SWITCH_MOTORS_PER_BANK
+        interface_index = interface_index / SWITCH_MOTORS_PER_BANK
+        bank_index = interface_index // BANKS_PER_INTERFACE
+        interface_index = interface_index / BANKS_PER_INTERFACE
+        ee_address = SWITCH_MOTOR_STATE_EEPROM_ADDRESS + (switch_motor_to_throw / SWITCH_MOTORS_PER_BANK)
+        gosub eeprom_read_byte
+        if switch_index < 4 then
+            i2c_addr = PCF8574_BASE_ADDRESS + (bank_index << 1)
+            i2c_write_value = 0
+            for k = 0 to 3
+                if ee_byte & (1 << k) then
+                    i2c_write_value = i2c_write_value | (1 << (k*2))
+                else
+                    i2c_write_value = i2c_write_value | (2 << (k*2))
+                endif
+            next k
+        else
+            i2c_addr = PCF8574A_BASE_ADDRESS + (bank_index << 1)
+            if ee_byte & $10 then
+                i2c_write_value = $fd
+            else
+                i2c_write_value = $fe
+            endif
+        endif
+        if interface_index = 0 then
+            I2CWRITE SW_INTERFACE_I2C_DATA, SW_INTERFACE_I2C_CLK, i2c_addr, [ i2c_write_value ], i2c_write_error
+        elseif interface_index = 1 then
+            ;???I2CWRITE SW_INTERFACE_I2C_DATA, SW_INTERFACE_I2C_CLK, i2c_addr, [ i2c_write_value ], i2c_write_error
+            goto i2c_write_error
+        elseif interface_index = 2 then
+            ;???I2CWRITE SW_INTERFACE_I2C_DATA, SW_INTERFACE_I2C_CLK, i2c_addr, [ i2c_write_value ], i2c_write_error
+            goto i2c_write_error
+        endif
+        pause 10
+i2c_write_error:
+        return
+
+;=============================================================================
+handle_switch_request:
+    loconet_sw_motor = $ff
+    for ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS to (TRANSLATE_TABLE_EEPROM_ADDRESS + (2 * (SWITCH_MOTOR_COUNT-1))) step 2
+        gosub eeprom_read_word
+        if loconet_switch = ee_word then
+            loconet_sw_motor = (ee_address - TRANSLATE_TABLE_EEPROM_ADDRESS) / 2
+            exit
+        endif
+    next ee_address
+
+    if (operate_mode = MODE_ROUTE_EDIT) then
+        if (loconet_sw_motor = $ff) then
+            route_to_find = loconet_switch
+            gosub route_find
+            if (route_found != ROUTE_NOT_FOUND) then
+                ARRAYWRITE DisplayString, ["Switch is route", 0]
+            else
+                ARRAYWRITE DisplayString, ["Switch undefined", 0]
+            endif
+            goto route_error
+        else
+            ;find loconet_switch in current route
+            route_switch_index = $ff
+            if route_num_switches != 0 then
+                for k = 0 to (route_num_switches-1)
+                    if (route_switches[k] & $7f) = loconet_sw_motor then
+                        route_switch_index = k
+                        exit
+                    endif
+                next k
+            else
+                k = 0
+            endif
+
+            if (route_switch_index = $ff) then
+                ; loconet_switch not found in current route, add switch to route
+                if route_num_switches >= MAX_ROUTE_SWITCHES then 
+                    ARRAYWRITE DisplayString, ["Too many switches", 0]
+                    goto route_error
+                endif
+                route_switch_index = route_num_switches
+                route_num_switches = route_num_switches + 1
+            endif
+            if switch_motor_direction = SWITCH_MOTOR_THROWN then
+                route_switches[route_switch_index] = loconet_sw_motor | $80
+            else
+                route_switches[route_switch_index] = loconet_sw_motor
+            endif
+        endif
+    else
+        if loconet_sw_motor = $ff then
+            route_to_find = loconet_switch
+            gosub route_find
+            if route_found != ROUTE_NOT_FOUND then
+                route_number = loconet_switch
+                gosub route_read
+                if operate_mode = MODE_OPERATE then
+                    gosub route_activate
+                endif
+            else
+                route_number = ROUTE_NOT_FOUND
+            endif
+        else
+            route_number = ROUTE_NOT_FOUND
+            if operate_mode = MODE_OPERATE then
+                switch_motor_to_throw = loconet_sw_motor
+                gosub switch_motor_write
+             endif
+        endif
+    endif
+    return
+
+;=============================================================================
+debounce    var byte
+switch_motor_button_check:
+    for interface_index = 0 to I2C_INTERFACE_COUNT-1
+        debounce = interface_debounce[interface_index] << 1
+        if ((interface_index = 0) && (PORTC.5 == 0)) then ;??? || ((interface_index = 1) && (PORTC.5 = 0)) || ((interface_index = 2) && (PORTC.5 = 0))) then
+            debounce = debounce | 1
+        endif
+        interface_debounce[interface_index] = debounce
+        if debounce = $7f then
+            ; for each PCF8574 with buttons attached...
+            for bank_index = 0 to BANKS_PER_INTERFACE-1
+                i2c_addr = PCF8574A_BASE_ADDRESS + (bank_index << 1)
+                if interface_index = 0 then
+                    I2CREAD SW_INTERFACE_I2C_DATA, SW_INTERFACE_I2C_CLK, i2c_addr, [ i2c_read_value ], i2c_read_error
+                elseif interface_index = 1 then
+                    ;???I2CREAD SW_INTERFACE_I2C_DATA, SW_INTERFACE_I2C_CLK, i2c_addr, [ i2c_read_value ], i2c_read_error
+                    goto i2c_read_error
+                elseif interface_index = 2 then
+                    ;???I2CREAD SW_INTERFACE_I2C_DATA, SW_INTERFACE_I2C_CLK, i2c_addr, [ i2c_read_value ], i2c_read_error
+                    goto i2c_read_error
+                endif
+                i2c_read_value = ~i2c_read_value
+                for switch_index = 0 to SWITCH_MOTORS_PER_BANK-1
+                    switch_motor_to_throw = (((interface_index * BANKS_PER_INTERFACE) + bank_index) * SWITCH_MOTORS_PER_BANK) + switch_index
+                    ; if the button is pushed
+                    if i2c_read_value & ($8 << switch_index) then
+                        ; if the button changed state...
+                        if last_motor_button_state[switch_motor_to_throw] = 0 then
+                            switch_motor = switch_motor_to_throw
+                            display_update_needed = 1
+                            led_to_change = LED_SWITCHMOTOR_BUTTON
+                            gosub led_flash
+                            if operate_mode == MODE_OPERATE then
+                                switch_motor_direction = SWITCH_MOTOR_TOGGLE
+                                gosub switch_motor_write
+                            elseif operate_mode == MODE_PROGRAM then
+                                if loconet_switch != $ffff then
+                                    if route_number != ROUTE_NOT_FOUND then
+                                        route_number = loconet_switch
+                                        gosub route_delete
+                                    endif
+                                    gosub switch_motor_map_delete
+                                    loconet_sw_motor = switch_motor
+                                    ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS + (switch_motor * 2)
+                                    ee_word = loconet_switch
+                                    gosub eeprom_write_word
+                                endif
+                            endif
+                            ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS + (2 * switch_motor_to_throw)
+                            gosub eeprom_read_word
+                            loconet_switch = ee_word
+                            if loconet_switch != $ffff then
+                                loconet_sw_motor = switch_motor_to_throw
+                            else
+                                loconet_sw_motor = $ff
+                            endif
+                            route_number = ROUTE_NOT_FOUND
+                        endif
+                        last_motor_button_state[switch_motor_to_throw] = 1
+                    else
+                        last_motor_button_state[switch_motor_to_throw] = 0
+                    endif
+                next switch_index
+i2c_read_error:
+            next bank_index
+        endif
+    next interface_index
+    return
+
+;=============================================================================
+switch_motor_initialize:
+    ;write all the switch motor controls to match the values read from eeprom
+    for switch_motor_to_throw = 0 to (SWITCH_MOTOR_COUNT-SWITCH_MOTORS_PER_BANK) step SWITCH_MOTORS_PER_BANK
+        gosub switch_motor_write_from_eeprom
+        switch_motor_to_throw = switch_motor_to_throw + (SWITCH_MOTORS_PER_BANK - 1)
+        gosub switch_motor_write_from_eeprom
+        switch_motor_to_throw = switch_motor_to_throw - (SWITCH_MOTORS_PER_BANK - 1)
+    next switch_motor_to_throw
+
+    loconet_sw_motor = $ff
+    switch_motor = $ff
+
+    ; count the number of routes stored in EEPROM
+    route_number = ROUTE_NOT_FOUND
+    route_num_routes = 0
+    for ee_address = ROUTE_TABLE_EEPROM_ADDRESS to (ROUTE_TABLE_EEPROM_ADDRESS + ROUTE_TABLE_SIZE - ROUTE_STORAGE_SIZE) step ROUTE_STORAGE_SIZE
+        gosub eeprom_read_word
+        if (ee_word = $ffff) then exit
+        route_num_routes = route_num_routes + 1
+    next ee_address
+    return
+
+;=============================================================================
+; Routes storage in eeprom...
+;   route number    word    the switch number from the Digitrax CAB
+;   switch id 1     byte    the array of n switch motor indexes...
+;   switch id 2     byte        the high bit of each switch id is used to save the switch state
+;       ...
+;   switch id MAX_ROUTE_SWITCHES     byte
+;=============================================================================
+route_read:
+    route_switch_index = $ff
+    ee_address = route_eeaddr+2
+    for route_num_switches = 0 to MAX_ROUTE_SWITCHES - 1
+        gosub eeprom_read_byte
+        if ee_byte = $ff then
+            exit
+        endif
+        route_switches[route_num_switches] = ee_byte
+        ee_address = ee_address + 1
+    next route_num_switches
+    if route_num_switches != 0 then
+        route_switch_index = 0
+    endif
+    return
+
+;=============================================================================
+route_find:
+    route_found = ROUTE_NOT_FOUND
+    for route_eeaddr = ROUTE_TABLE_EEPROM_ADDRESS to ROUTE_TABLE_EEPROM_ADDRESS + ((route_num_routes-1)*ROUTE_STORAGE_SIZE) step ROUTE_STORAGE_SIZE
+        ee_address = route_eeaddr
+        gosub eeprom_read_word
+        if ee_word = route_to_find then
+            route_found = ee_word
+            return
+        endif
+    next route_eeaddr
+    return
+
+;=============================================================================
+nxt_eeaddr      var byte
+route_delete:
+    route_to_find = route_number
+    gosub route_find
+    if route_found != ROUTE_NOT_FOUND then
+        for nxt_eeaddr = (route_eeaddr + ROUTE_STORAGE_SIZE) to ((ROUTE_TABLE_EEPROM_ADDRESS + (route_num_routes * MAX_ROUTES)) - 1)
+            ee_address = nxt_eeaddr
+            gosub eeprom_read_byte
+            ee_address = route_eeaddr
+            gosub eeprom_write_byte
+            route_eeaddr = route_eeaddr + 1
+        next nxt_eeaddr
+        ee_byte = $ff
+        for ee_address = route_eeaddr to route_eeaddr + ROUTE_STORAGE_SIZE - 1
+            gosub eeprom_write_byte
+        next ee_address
+        route_num_routes = route_num_routes - 1
+        route_number = ROUTE_NOT_FOUND
+    endif
+    return
+
+;=============================================================================
+route_delete_switch:
+    if route_switch_index != $ff then
+        if route_num_switches = 1 then
+            route_switch_index = $ff
+        elseif route_switch_index = route_num_switches - 1 then
+            route_switch_index = route_switch_index - 1
+        else
+            for k = route_switch_index to route_num_switches - 2
+                route_switches[k] = route_switches[k+1]
+            next k
+        endif
+        route_num_switches = route_num_switches - 1
+    endif
+    return
+
+;=============================================================================
+route_error:
+    DisplayRow = 1
+    DisplayCol = 0
+    gosub display_set_cursor
+    gosub display_write_string
+    gosub display_clear_to_end_of_line
+    pause 2000
+    return
+
+;=============================================================================
+route_activate:
+    if route_num_switches != 0 then
+        kk var byte
+        for kk = 0 to route_num_switches - 1
+            switch_motor_to_throw = route_switches[kk] & $7f
+            if route_switches[kk] & $80 then
+                switch_motor_direction = SWITCH_MOTOR_THROWN
+            else
+                switch_motor_direction = SWITCH_MOTOR_CLOSED
+            endif
+            gosub switch_motor_write
+        next kk
+    endif
+    return
+
+;=============================================================================
+route_previous_switch:
+    if route_switch_index != $ff and route_switch_index != 0 then
+        route_switch_index = route_switch_index - 1
+translate_route_switch:
+        ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS + (route_switches[route_switch_index] * 2)
+        gosub eeprom_read_word
+        loconet_switch = ee_word
+    endif
+    return
+
+;=============================================================================
+route_next_switch:
+    if route_switch_index != $ff and route_switch_index < route_num_switches-1 then
+        route_switch_index = route_switch_index + 1
+        goto translate_route_switch
+    endif
+    return
+
+;=============================================================================
+route_save:
+    route_to_find = route_number
+    gosub route_find
+    if (route_found = ROUTE_NOT_FOUND) then
+        if route_num_routes = MAX_ROUTES then
+            ARRAYWRITE DisplayString, ["Too many routes", 0]
+            goto route_error
+        endif
+        route_num_routes = route_num_routes + 1
+    endif
+
+    k = 0
+    for ee_address = route_eeaddr + 2 to route_eeaddr + 2 + route_num_switches - 1
+        ee_byte = route_switches[k]
+        gosub eeprom_write_byte
+        k = k + 1
+    next ee_address 
+    if k < MAX_ROUTE_SWITCHES then
+        ee_byte = $ff
+        gosub eeprom_write_byte
+    endif
+
+    ee_address = route_eeaddr
+    ee_word = route_number
+    gosub eeprom_write_word
+route_cancel:
+    loconet_switch = route_number
+    route_to_find = route_number
+    gosub route_find
+    if (route_found = ROUTE_NOT_FOUND) then
+        route_number = ROUTE_NOT_FOUND
+    else
+        gosub route_read
+    endif
+    return
+
+;=============================================================================
+route_create:
+    route_switch_index = $ff
+    route_num_switches = 0
+    return
+
+;=============================================================================
+#ifdef ERASE_EEPROM
+switch_motor_erase_eeprom:
+    ee_byte = $ff
+    for ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS to ROUTE_TABLE_EEPROM_ADDRESS-1
+        gosub eeprom_write_byte
+    next ee_address
+
+    ee_word = $ffff
+    ee_byte = $ff
+    for ee_address = ROUTE_TABLE_EEPROM_ADDRESS to (ROUTE_TABLE_EEPROM_ADDRESS + ROUTE_TABLE_SIZE - ROUTE_STORAGE_SIZE) step ROUTE_STORAGE_SIZE
+        gosub eeprom_write_word
+        ee_address = ee_address + 2
+        gosub eeprom_write_byte
+        ee_address = ee_address - 2
+    next ee_address
+    return
+#endif
+
+;=============================================================================
+

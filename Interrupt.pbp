@@ -1,0 +1,204 @@
+;=============================================================================
+RXFIFO_SIZE con 16
+rx_data_fifo    var byte[RXFIFO_SIZE] bank0 SYSTEM
+rx_head         var byte bank0 SYSTEM
+rx_tail         var byte bank0 SYSTEM
+
+timer0_interrupt var byte bank0 SYSTEM
+
+;=============================================================================
+define INTHAND  isr
+
+#if __PROCESSOR__ = "16F1783"
+fsr0l_save      var byte bank0 SYSTEM
+fsr0h_save      var byte bank0 SYSTEM
+
+ASM
+bank0   macro
+    clrf    BSR                             ; set bank to 0
+    endm
+
+bank3   macro
+    movlb   3                               ;     set bank to 3
+    endm
+
+interrupt_preamble macro
+    clrf    BSR                             ; set bank to 0
+    movf    FSR0L,W                         ;
+    movwf   fsr0l_save                      ; fsr0l_save = fsr0l
+    movf    FSR0H,W                         ;
+    movwf   fsr0h_save                      ; fsr0h_save = fsr0h
+    endm
+
+interrupt_postamble macro
+    movf    fsr0l_save,  W                  ; fsr0l = fsr0L_save
+    movwf   FSR0L                           ;
+    movf    fsr0h_save,  W                  ; fsr0h = fsr0H_save
+    movwf   FSR0H                           ;
+    clrf    BSR                             ; set bank to 0
+    endm
+
+branch  macro target_label
+    bra target_label
+    endm
+
+move_w_to_fs macro
+    movwf   FSR0L                           ;         FSR0L = W
+    clrf    FSR0H                           ;         FSR0H = 0
+    endm
+
+store_w_to_fs macro
+    movwf   INDF0                           ;
+    endm
+
+ENDASM
+
+#endif
+
+#if __PROCESSOR__ = "16F886"
+wsave    VAR BYTE   $70   SYSTEM
+ssave    VAR BYTE   BANK0 SYSTEM
+psave    VAR BYTE   BANK0 SYSTEM
+fsr_save VAR BYTE   BANK0 SYSTEM
+
+ASM
+
+bank0   macro
+    endm
+
+bank3   macro
+    endm
+
+interrupt_preamble macro
+  if CODE_SIZE <= 2                         ; if less than 2K code space
+    movwf   wsave                           ;    save W
+    swapf   STATUS, W                       ;    save STATUS without modifying it
+    clrf    STATUS                          ;    clear STATUS
+    movwf   ssave                           ;
+    movf    PCLATH, W                       ;    save PCLATH
+    movwf   psave                           ;
+  else                                      ; else
+    clrf    STATUS                          ;    clear STATUS
+  endif                                     ; endif
+    movf    FSR,W                           ;
+    movwf   fsr_save                        ; fsr_save = fsr
+    endm
+
+interrupt_postamble macro
+    movf    fsr_save, W                     ; fsr = fsr_save
+    movwf   FSR                             ;
+    movf    psave, W                        ; restore PCLATH
+    movwf   PCLATH                          ;
+    swapf   ssave, W                        ; restore STATUS
+    movwf   STATUS                          ;
+    swapf   wsave, F                        ; restore W without changing STATUS
+    swapf   wsave, W                        ;
+    endm
+
+branch  macro target_label
+    goto    target_label
+    endm
+
+move_w_to_fs macro
+    movwf   FSR                             ;         FSR = W
+    endm
+
+store_w_to_fs macro
+    movwf   INDF                            ;
+    endm
+
+ENDASM
+
+#endif
+
+ASM
+isr:
+    interrupt_preamble
+isr1:
+    bank0                                   
+    btfss   PIR1,5                          ;
+    branch  isr6                            ; while PIR1.RCIF = 1
+    bank3                                   ;
+    btfss   RCSTA, 2                        ;     if RCSTA.FERR then
+    branch  isr2                            ;         framing error
+    movf    RCREG, W                        ;         W = RCREG
+    bcf     RCSTA, 7                        ;         RCSTA.7 = 0 ; SPEN = 0 reset the serial port
+    bsf     RCSTA, 7                        ;         RCSTA.7 = 1 ; SPEN = 1
+                                            ;         could notify the upper layer but protocol doesn't require it
+    branch  isr6                            ;         break;
+isr2:                                       ;
+    btfss   RCSTA, 1                        ;     elseif RCSTA.OERR then
+    branch  isr3                            ;         overrun error
+    bcf     RCSTA, 4                        ;         RCSTA.4 = 0 ; CREN = 0 to clear error
+    bsf     RCSTA, 4                        ;         RCSTA.4 = 1 ; CREN = 1
+                                            ;         could notify the upper layer but protocol doesn't require it
+    branch  isr6                            ;         break;
+isr3:                                       ;     else
+    bank0                                   ;
+    movf    rx_tail, W                      ;         W = rx_tail
+    addlw   rx_data_fifo                    ;         W = W + rx_data_fifo
+    move_w_to_fs                            ;         FS = W
+    movf    rx_tail, W                      ;
+    addlw   1                               ;
+    subwf   rx_head, W                      ;
+    btfss   STATUS, 2                       ;         if rx_tail + 1 == rx_head then
+    branch  isr4                            ;
+                                            ;             fifo full
+                                            ;             could notify the upper layer but protocol doesn't require it
+    bank3                                   ;             set bank to 3
+    movf    RCREG, W                        ;             W = RCREG
+    branch  isr1                            ;
+isr4:                                       ;         else
+    movf    rx_tail, W                      ;
+    addlw   1                               ;
+    movwf   rx_tail                         ;             rx_tail = rx_tail + 1
+    sublw   _RXFIFO_SIZE                    ;
+    btfss   STATUS, 2                       ;             if rx_tail == RXFIFO_SIZE
+    branch  isr5                            ;
+    clrw                                    ;
+    movwf   rx_tail                         ;                 rx_tail = 0
+isr5:                                       ;             endif
+    bank3
+    movf    RCREG, W                        ;             W = RCREG
+    bank0                                   ;             set bank to 0
+    store_w_to_fs                           ;             store rx data in fifo
+                                            ;         endif
+    branch  isr1                            ;     endif
+isr6:                                       ; endwhile
+    btfss   INTCON,2                        ; if INTCON.TMR0IF then
+    branch  isr7                            ;
+    bcf     INTCON,2                        ;    INTCON.TMR0IF = 0
+    bank0                                   ;    set bank to 0
+    movlw   1                               ;    timer0_interrupt = 1
+    movwf   timer0_interrupt                ;
+isr7:                                       ; endif
+    interrupt_postamble
+    retfie
+ENDASM
+
+;=============================================================================
+interrupt_initialize:
+    ; initialize serial receive interrupts
+    PIR1.4 = 0      ; PIR1.TXIF = 0  clear serial port transmit interrupt flag
+    RCSTA.7 = 1     ; SPEN = 1       enable serial port
+    PIE1.5 = 1      ; RCIE = 1       enable receive interrupt
+    INTCON.6 = 1    ; PEIE = 1       enable peripheral interrupt
+    RCSTA.4 = 1     ; CREN = 1       enable the serial port receiver
+
+    ; initialize timer 0 interrupts
+#if __PROCESSOR__ = "16F1783"
+    OPTION_REG = 7   ; 1:256 prescaler -- results in timer interrupts about every 8 milliseconds
+#endif
+#if __PROCESSOR__ = "16F886"
+    OPTION_REG = 5   ; 1:64 prescaler -- results in timer interrupts about every 8 milliseconds
+#endif
+    TMR0 = 0         ;
+    INTCON.2 = 0     ; INTCON.TMR0IF = 0      clear timer 0 interrupt flag
+    INTCON.5 = 1     ; INTCON.TMR0IE          enable timer 0 interrupt
+
+    ; global interrupt enable = 1
+    INTCON.7 = 1
+    return
+
+;=============================================================================
+

@@ -1,0 +1,161 @@
+;=============================================================================
+; I2C interface to a 4 row by 20 column display module.  A PCF8574 I2Ci-to-
+; parralel connects the processor to the LCD module.  The low 4 bits of I2C
+; data connect to the control signals of the LCD module (RS, RW, E, BKLT).
+; The high 4 bits of I2C data connect to the data lines of the LCD module.
+; This forces us to use 4 bit accesses to program the display.  The first
+; few commands use 8 bit accesses until the display can be set to 4 bit.
+;=============================================================================
+
+DISPLAY_I2C_ADDRESS con $4E
+
+DISPLAY_ROWS    con 4
+DISPLAY_COLUMNS con 20
+
+DISPLAY_I2C_CLK  var SCL2
+DISPLAY_I2C_DATA var SDA2
+
+;=============================================================================
+; Display Commands
+DSP_CLEAR          con  $1
+DSP_ENTRY_MODE_SET con $4
+    DSP_EMS_ID  con $2
+    DSP_EMS_SH  con $1
+DSP_ON_OFF         con $8
+    DSP_OO_D   con $4
+    DSP_OO_C   con $2
+    DSP_OO_B   con $1
+DSP_SHIFT          con $10
+    DSP_SHIFT_CURSOR_LEFT   con $0
+    DSP_SHIFT_CURSOR_RIGHT  con $4
+    DSP_SHIFT_DISPLAY_LEFT  con $8
+    DSP_SHIFT_DISPLAY_RIGHT con $C
+DSP_FUNCTION_SET   con $20
+    DSP_FS_DL8 con $10
+    DSP_FS_N   con $8
+    DSP_FS_F   con $4
+DSP_SET_CGR_ADDR   con $40
+DSP_SET_DDR_ADDR   con $80
+
+;=============================================================================
+; Four low bits of I2C data define the control lines to the display
+DISPLAY_RS      CON 1
+DISPLAY_RW      con 2
+DISPLAY_E       con 4
+DISPLAY_BKLT    con 8
+
+;=============================================================================
+
+DisplayData VAR BYTE
+    ; DisplayData is variable used within the display_code to contain
+    ; the command or data to be written to the display.  Code outside of this
+    ; module should not change DisplayData.
+
+DisplayString VAR BYTE[DISPLAY_COLUMNS+1] ; +1 for null terminator
+    ; Set DisplayString to a string of characters before calling 
+    ; display_write_string. The string must be null terminated.
+
+DisplayRow  VAR BYTE
+
+DisplayCol  VAR BYTE
+    ; Set DisplayRow and DisplayCol before a call to display_set_cursor.
+
+;=============================================================================
+dspstr var byte[6]
+    ; Temporary array to hold upto 6 values to be written to the display with
+    ; I2CWRITE.
+
+;=============================================================================
+display_write_command8:
+    dspstr[0] = DisplayData + DISPLAY_BKLT
+    dspstr[1]=DisplayData|DISPLAY_BKLT|DISPLAY_E
+    dspstr[3]=DisplayData|DISPLAY_BKLT
+    I2CWRITE DISPLAY_I2C_DATA,DISPLAY_I2C_CLK,DISPLAY_I2C_ADDRESS,[STR dspstr \3]
+    PAUSEUS 500
+    RETURN
+
+;=============================================================================
+display_write_command4:
+    dspstr[0]= (DisplayData & $f0)|DISPLAY_BKLT
+    dspstr[1]= (DisplayData & $f0)|DISPLAY_BKLT|DISPLAY_E
+    dspstr[2]= (DisplayData & $f0)|DISPLAY_BKLT
+    dspstr[3]= ((DisplayData & $0f)<<4)|DISPLAY_BKLT
+    dspstr[4]= ((DisplayData & $0f)<<4)|DISPLAY_BKLT|DISPLAY_E
+    dspstr[5]= ((DisplayData & $0f)<<4)|DISPLAY_BKLT
+    I2CWRITE DISPLAY_I2C_DATA,DISPLAY_I2C_CLK,DISPLAY_I2C_ADDRESS,[STR dspstr \6]
+    PAUSEUS 1000
+    RETURN
+
+;=============================================================================
+i var byte
+display_clear_to_end_of_line:
+    ARRAYWRITE DisplayString, [REP " "\(DISPLAY_COLUMNS-DisplayCol), 0]
+display_write_string:
+    for i = 0 to DISPLAY_COLUMNS-1
+        DisplayData = DisplayString[i]
+        if DisplayData = 0 then exit ; break out of loop on null terminator
+        dspstr[0]= (DisplayData & $f0)|DISPLAY_BKLT|DISPLAY_RS
+        dspstr[1]= (DisplayData & $f0)|DISPLAY_BKLT|DISPLAY_RS|DISPLAY_E
+        dspstr[2]= (DisplayData & $f0)|DISPLAY_BKLT|DISPLAY_RS
+        dspstr[3]= ((DisplayData & $0f)<<4)|DISPLAY_BKLT|DISPLAY_RS
+        dspstr[4]= ((DisplayData & $0f)<<4)|DISPLAY_BKLT|DISPLAY_RS|DISPLAY_E
+        dspstr[5]= ((DisplayData & $0f)<<4)|DISPLAY_BKLT|DISPLAY_RS
+        I2CWRITE DISPLAY_I2C_DATA,DISPLAY_I2C_CLK,DISPLAY_I2C_ADDRESS,[STR dspstr \6]
+        DisplayCol = DisplayCol + 1
+    next i
+    RETURN
+
+;=============================================================================
+display_clear:
+    DisplayData = DSP_CLEAR
+    goto display_write_command4
+
+;=============================================================================    
+display_row_address var byte[DISPLAY_ROWS]
+display_set_cursor:
+    if (DisplayRow >= DISPLAY_ROWS) or (DisplayCol >= DISPLAY_COLUMNS) then return
+    DisplayData = DSP_SET_DDR_ADDR + display_row_address[DisplayRow] + DisplayCol 
+    goto display_write_command4
+
+;=============================================================================
+display_initialize:
+    ARRAYWRITE display_row_address, [ $0, $40, $14, $54 ]
+        ;display_row_address contains the address in display memory
+        ;where each row starts
+
+    ; Set I2C Display Port outputs to zero
+    I2CWRITE DISPLAY_I2C_DATA,DISPLAY_I2C_CLK,DISPLAY_I2C_ADDRESS,[$00]
+
+    ; Send commands to initialize display to 4-bit access
+    Pause 100 ' Wait for LCD to start up
+    ; Function Set for 8-bit
+    DisplayData = DSP_FUNCTION_SET|DSP_FS_DL8
+    gosub display_write_command8
+    gosub display_write_command8
+    gosub display_write_command8
+
+    ;Function Set for 4-bit while addressing in 8-bit mode
+    DisplayData = DSP_FUNCTION_SET
+    gosub display_write_command8
+
+    ; 4-bit accesses from here on
+    DisplayData = DSP_FUNCTION_SET|DSP_FS_N
+    gosub display_write_command4
+    DisplayData = DSP_FUNCTION_SET|DSP_FS_N
+    gosub display_write_command4
+    DisplayData = DSP_ON_OFF    ; display OFF, cursor OFF, cursor blink OFF)
+    gosub display_write_command4
+    DisplayData = DSP_CLEAR
+    gosub display_write_command4
+    DisplayData = DSP_ENTRY_MODE_SET|DSP_EMS_ID
+    gosub display_write_command4
+
+    DisplayData = DSP_FUNCTION_SET|DSP_FS_N
+    gosub display_write_command4
+    DisplayData = DSP_ON_OFF|DSP_OO_D|DSP_OO_C|DSP_OO_B ; Display on
+    gosub display_write_command4
+
+    goto display_clear
+
+;=============================================================================
+

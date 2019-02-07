@@ -1,0 +1,151 @@
+;=============================================================================
+asm
+    ERRORLEVEL -306  ;disable warning about crossing page boundary
+endasm
+
+;=============================================================================
+;
+; Available __CONFIG labels for PIC16F1783:
+;
+;CONFIG1 Options
+;
+;  Oscillator Selection
+;    _FOSC_ECH	    ;ECH, External Clock, High Power Mode (4-32 MHz): device clock supplied to
+;   			     	  CLKIN pin
+;    _FOSC_ECM	    ;ECM, External Clock, Medium Power Mode (0.5-4 MHz): device clock supplied to
+;   			     	  CLKIN pin
+;    _FOSC_ECL	    ;ECL, External Clock, Low Power Mode (0-0.5 MHz): device clock supplied to
+;   			     	  CLKIN pin
+;    _FOSC_INTOSC	;INTOSC oscillator: I/O function on CLKIN pin
+;    _FOSC_EXTRC	;EXTRC oscillator: External RC circuit connected to CLKIN pin
+;    _FOSC_HS	    ;HS Oscillator, High-speed crystal/resonator connected between OSC1 and OSC2
+;	          			pins
+;    _FOSC_XT	    ;XT Oscillator, Crystal/resonator connected between OSC1 and OSC2 pins
+;    _FOSC_LP	    ;LP Oscillator, Low-power crystal connected between OSC1 and OSC2 pins
+;
+;  Watchdog Timer Enable
+;    _WDTE_ON	    ;WDT enabled
+;    _WDTE_NSLEEP	;WDT enabled while running and disabled in Sleep
+;    _WDTE_SWDTEN	;WDT controlled by the SWDTEN bit in the WDTCON register
+;    _WDTE_OFF	    ;WDT disabled
+;
+;  Power-up Timer Enable
+;    _PWRTE_OFF	    ;PWRT disabled
+;    _PWRTE_ON	    ;PWRT enabled
+;
+;  MCLR Pin Function Select
+;    _MCLRE_ON	    ;MCLR/VPP pin function is MCLR
+;    _MCLRE_OFF	    ;MCLR/VPP pin function is digital input
+;
+;  Flash Program Memory Code Protection
+;    _CP_OFF	    ;Program memory code protection is disabled
+;    _CP_ON	        ;Program memory code protection is enabled
+;
+;  Data Memory Code Protection
+;    _CPD_OFF	    ;Data memory code protection is disabled
+;    _CPD_ON	    ;Data memory code protection is enabled
+;
+;  Brown-out Reset Enable
+;    _BOREN_ON	    ;Brown-out Reset enabled
+;    _BOREN_NSLEEP	;Brown-out Reset enabled while running and disabled in Sleep
+;    _BOREN_SBODEN	;Brown-out Reset controlled by the SBOREN bit in the BORCON register
+;    _BOREN_OFF	    ;Brown-out Reset disabled
+;
+;  Clock Out Enable
+;    _CLKOUTEN_OFF	;CLKOUT function is disabled. I/O or oscillator function on the CLKOUT pin
+;    _CLKOUTEN_ON	;CLKOUT function is enabled on the CLKOUT pin, Fosc/4
+;
+;  Internal/External Switchover
+;    _IESO_ON	    ;Internal/External Switchover mode is enabled
+;    _IESO_OFF	    ;Internal/External Switchover mode is disabled
+;
+;  Fail-Safe Clock Monitor Enable
+;    _FCMEN_ON	    ;Fail-Safe Clock Monitor is enabled
+;    _FCMEN_OFF	    ;Fail-Safe Clock Monitor is disabled
+;
+;CONFIG2 Options
+;
+;  Flash Memory Self-Write Protection
+;    _WRT_OFF	    ;Write protection off
+;    _WRT_BOOT	    ;000h to 1FFh write protected, 200h to FFFh may be modified by EECON control
+;    _WRT_HALF	    ;000h to 7FFh write protected, 800h to FFFh may be modified by EECON control
+;    _WRT_ALL	    ;000h to 7FFh write protected, no addresses may be modified by EECON control
+;
+;  Voltage Regulator Capacitor Enable bit
+;    _VCAPEN_OFF	;Vcap functionality is disabled on RA6.
+;    _VCAPEN_ON	    ;Vcap functionality is enabled on RA6 (Vddcore is connected to the pad)
+;
+;  PLL Enable
+;    _PLLEN_ON	    ;4x PLL enabled
+;    _PLLEN_OFF	    ;4x PLL disabled
+;
+;  Stack Overflow/Underflow Reset Enable
+;    _STVREN_ON	    ;Stack Overflow or Underflow will cause a Reset
+;    _STVREN_OFF	;Stack Overflow or Underflow will not cause a Reset
+;
+;  Brown-out Reset Voltage Selection
+;    _BORV_LO	    ;Brown-out Reset Voltage (Vbor), low trip point selected.
+;    _BORV_HI	    ;Brown-out Reset Voltage (Vbor), high trip point selected.
+;
+;  Low Power Brown-Out Reset Enable Bit
+;    _LPBOR_OFF	    ;Low power brown-out is disabled
+;    _LPBOR_ON	    ;Low power brown-out is enabled
+;
+;  Low-Voltage Programming Enable
+;    _LVP_ON	    ;Low-voltage programming enabled
+;    _LVP_OFF	    ;High-voltage on MCLR/VPP must be used for programming
+
+;=============================================================================
+#if __PROCESSOR__ = "16F1783"
+#CONFIG
+    __config _CONFIG1, _FOSC_INTOSC & _WDTE_OFF & _PWRTE_ON & _MCLRE_OFF & _CP_OFF & _CPD_OFF & _BOREN_ON & _CLKOUTEN_OFF & _IESO_OFF & _FCMEN_OFF
+    __config _CONFIG2, _WRT_OFF & _LVP_OFF & _PLLEN_ON & _STVREN_OFF & _VCAPEN_OFF & _BORV_HI & _LPBOR_OFF
+#ENDCONFIG
+#endif
+#if __PROCESSOR__ = "16F886"
+#CONFIG
+    __config _CONFIG1, _INTRC_OSC_NOCLKOUT & _WDT_OFF & _MCLRE_OFF & _LVP_OFF & _CP_OFF
+#ENDCONFIG
+#endif
+
+;=============================================================================
+; DEFINEs:
+#if __PROCESSOR__ = "16F1783"
+    define OSC 32       'Internal oscillator operates at 16MHz with X4 PLL and /2 for CPU FOSC
+#endif
+#if __PROCESSOR__ = "16F886"
+    define OSC 8        
+#endif
+define I2C_SLOW 1   'Enables using 100KHz I2C device with OSC above 8MHz
+define WRITE_INT 1  'Disables interrupts during EEPROM writes
+
+;=============================================================================
+; INITIALIZE REGISTERS:
+OSCCON = %01111000    'Internal Osc set to 16MHz, clock determined by Config FOSC bits
+#if __PROCESSOR__ = "16F1783"
+    ANSELA = %00000000    'Set all pins for digital operation
+    ANSELB = %00000000
+#endif
+#if __PROCESSOR__ = "16F886"
+    ANSEL  = %00000000    'Set all pins for digital operation
+    ANSELH = %00000000
+#endif
+TRISA  = %10001111    'Set PORTA bits 0, 1, 2, 3, 7 as inputs, the rest as outputs
+TRISB  = %01100000    'Set PORTB bits 5, 6 as inputs, the rest as outputs
+TRISC  = %10100011    'Set PORTC bits 0, 1, 5, 7 as inputs, the rest as outputs
+#if __PROCESSOR__ = "16F1783"
+    WPUA   = %10001111    'Set weak pullups on PORTA bits 0, 1, 2, 3 and 7, the rest as outputs
+#endif
+#if __PROCESSOR__ = "16F886"
+    WPUB   = %10001111    'Set weak pullups on PORTA bits 0, 1, 2, 3 and 7, the rest as outputs
+#endif
+
+;=============================================================================
+SCL1     var PORTC.3 'IC pin 14 (RC3) is a hard or soft I2C Clock
+SDA1     var PORTC.4 'IC pin 15 (RC4) is a hard or soft I2C Data
+
+SCL2     var PORTA.4 'IC pin  6 (RA4) is a soft I2C Clock
+SDA2     var PORTA.5 'IC pin  7 (RA5) is a soft I2C Data
+
+;=============================================================================
+

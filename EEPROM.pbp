@@ -1,0 +1,129 @@
+;=============================================================================
+; This module provides functions to read and write EEPROM.  This supports
+; eeprom access to either the PIC internal EEPROM or an external
+; 24CW128X but not both (see the conditional compilation below).
+; 
+;=============================================================================
+
+#ifdef USE_PIC_INTERNAL_EEPROM
+EEPROM_BYTES    con 256
+#else
+EEPROM_I2C_ADDRESS  con $A0
+
+EEPROM_I2C_CLK  var SCL2
+EEPROM_I2C_DATA var SDA2
+
+EEPROM_BYTES    con 16384
+
+#endif
+
+ee_address      var word
+ee_byte         var byte
+ee_word         var word
+
+;=============================================================================
+; eeprom_read_byte:
+;   input:  ee_address - the eeprom address from which to read
+;   output: ee_byte - the byte value read from eeprom
+;
+eeprom_read_byte:
+
+#ifdef USE_PIC_INTERNAL_EEPROM
+    READ ee_address, ee_byte
+#else
+    I2CWRITE EEPROM_I2C_DATA, EEPROM_I2C_CLK, EEPROM_I2C_ADDRESS, [ ee_address.byte1, ee_address.byte0 ]
+    I2CREAD EEPROM_I2C_DATA, EEPROM_I2C_CLK, EEPROM_I2C_ADDRESS, [ ee_byte ]
+#endif
+
+    return
+
+;=============================================================================
+; eeprom_write_byte:
+;   input:  ee_address - the eeprom address to which to write
+;           ee_byte - the byte value to be written to eeprom
+;
+eeprom_write_byte:
+
+#ifdef USE_PIC_INTERNAL_EEPROM
+    WRITE  ee_address, ee_byte
+#else
+    I2CWRITE EEPROM_I2C_DATA, EEPROM_I2C_CLK, EEPROM_I2C_ADDRESS, [ ee_address.byte1, ee_address.byte0, ee_byte ]
+    pause 10
+#endif
+
+    return
+
+;=============================================================================
+; eeprom_read_word:
+;   input:  ee_address - the eeprom address from which to read
+;           ee_word - the word value read from eeprom
+;
+eeprom_read_word:
+
+#ifdef USE_PIC_INTERNAL_EEPROM
+    READ ee_address, word ee_word
+#else
+    I2CWRITE EEPROM_I2C_DATA, EEPROM_I2C_CLK, EEPROM_I2C_ADDRESS, [ ee_address.byte1, ee_address.byte0 ]
+    I2CREAD EEPROM_I2C_DATA, EEPROM_I2C_CLK, EEPROM_I2C_ADDRESS, [ ee_word.byte1, ee_word.byte0 ]
+#endif
+
+    return
+
+;=============================================================================
+; eeprom_write_word:
+;   input:  ee_address - the eeprom address to which to write
+;           ee_word - the word value to be written to eeprom
+;
+eeprom_write_word:
+
+#ifdef USE_PIC_INTERNAL_EEPROM
+    WRITE ee_address, word ee_word
+#else
+    I2CWRITE EEPROM_I2C_DATA, EEPROM_I2C_CLK, EEPROM_I2C_ADDRESS, [ ee_address.byte1, ee_address.byte0, ee_word.byte1, ee_word.byte0 ]
+    pause 10
+#endif
+
+    return
+
+#ifdef DO_LONG_EEPROM_FUNCTIONS
+
+ee_long var word[2]
+
+;=============================================================================
+; eeprom_read_long:
+;   input:  ee_address - the eeprom address from which to read
+;           ee_long - the long value read from eeprom
+;
+eeprom_read_long:
+
+#ifdef USE_PIC_INTERNAL_EEPROM
+    READ ee_address  , word ee_long[0]
+    READ ee_address+2, word ee_long[1]
+#else
+    I2CWRITE EEPROM_I2C_DATA, EEPROM_I2C_CLK, EEPROM_I2C_ADDRESS, [ ee_address.byte1, ee_address.byte0 ]
+    I2CREAD EEPROM_I2C_DATA, EEPROM_I2C_CLK, EEPROM_I2C_ADDRESS, [ ee_long[0].byte1, ee_long[0].byte0, ee_long[1].byte1, ee_long[1].byte0 ]
+#endif
+
+    return
+
+;=============================================================================
+; eeprom_write_long:
+;   input:  ee_address - the eeprom address to which to write
+;           ee_long - the long value to be written to eeprom
+;
+
+eeprom_write_long:
+
+#ifdef USE_PIC_INTERNAL_EEPROM
+    WRITE ee_address  , word ee_long[0]
+    WRITE ee_address+2, word ee_long[1]
+#else
+    I2CWRITE EEPROM_I2C_DATA, EEPROM_I2C_CLK, EEPROM_I2C_ADDRESS, [ ee_address.byte1, ee_address.byte0, ee_long[0].byte1, ee_long[0].byte0, ee_long[1].byte1, ee_long[1].byte0 ]
+    pause 10
+#endif
+
+    return
+
+;=============================================================================
+#endif
+

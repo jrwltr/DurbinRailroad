@@ -1,0 +1,125 @@
+;=============================================================================
+; Onboard switches:
+;   Four push buttons are connected to the low four bits of PORTA. The port 
+;   switches are logic 1 when not pressed and logic 0 when pressed.
+;    
+;=============================================================================
+
+OBB_debounce        var byte
+OBB_value           var byte
+OBB_previous_value  var byte
+OBB_last_debounced  var byte
+
+OperateProgramSwitch    var PORTC.1
+
+pressed_button      var byte
+button_counter      var word
+button_end_count    var word
+
+BUTTON_FIRST_COUNT          con 2   ; about   16 milliseconds (  2 counts @ 8 milliseconds per count)
+BUTTON_FIRST_REPEAT_COUNT   con 125 ; about 1000 milliseconds (125 counts @ 8 milliseconds per count)
+BUTTON_NEXT_REPEAT_COUNT    con 36  ; about  288 milliseconds ( 36 counts @ 8 milliseconds per count)
+
+;=============================================================================
+; onboard_switch_check is called whenever timer0 expires, about every 8 milliseconds
+;
+onboard_switch_check:
+    ; shift a zero into OBB_debounce when we see a change on any switch
+    ; shift a one into OBB_debounce when no change is detected
+    OBB_debounce = OBB_debounce << 1
+    OBB_value = ~((PORTA & $f) | ((OperateProgramSwitch ^ 1) << 4))
+    if OBB_value = OBB_previous_value then 
+        ; no switch change since we last looked
+        OBB_debounce = OBB_debounce | 1
+    endif
+    OBB_previous_value = OBB_value
+
+    if OBB_debounce = $7f then
+        ; we saw a change in the switches followed by 7 timer interrupts
+        ; with no change
+        OBB_debounce = OBB_value ^ OBB_last_debounced
+            ; using OBB_debounce as a temporary value, the
+            ; proper value will be restored below, it now 
+            ; contains the bits that changed since the last 
+            ; debounced switch change
+        OBB_last_debounced = OBB_value
+        Mask var byte
+        Mask = 1
+        do 
+            if OBB_debounce & Mask then
+                if OBB_value & Mask then
+                    ; button pressed
+                    pressed_button = Mask
+                    button_counter = 0
+                    button_end_count = BUTTON_FIRST_COUNT
+                else
+                    ; button released
+                    if     pressed_button = 1 then
+                        gosub button_1_released
+                    elseif pressed_button = 2 then
+                        gosub button_2_released
+                    elseif pressed_button = 4 then
+                        gosub button_3_released
+                    elseif pressed_button = 8 then
+                        gosub button_4_released
+                    endif
+                    pressed_button = 0
+                    display_update_needed = 1
+                endif
+            endif
+            Mask = Mask * 2
+        loop until Mask > 8
+        if (OBB_debounce & $10) then
+            display_update_needed = 1
+            if OBB_value & $10 then
+                gosub operate_switch_on
+            else
+                gosub operate_switch_off
+            endif
+        endif
+        OBB_debounce = $7f  ; done with OBB_debounce as a temporary variable
+    endif
+
+    if pressed_button then
+        button_counter = button_counter + 1
+        if button_counter = button_end_count then
+            display_update_needed = 1
+            led_to_change = LED_ONBOARD_BUTTON
+            gosub led_flash
+            if button_end_count = BUTTON_FIRST_COUNT then
+                ; first time button press
+                if     pressed_button = 1 then
+                    gosub button_1_pressed
+                elseif pressed_button = 2 then
+                    gosub button_2_pressed
+                elseif pressed_button = 4 then
+                    gosub button_3_pressed
+                elseif pressed_button = 8 then
+                    gosub button_4_pressed
+                endif
+                button_end_count = BUTTON_FIRST_REPEAT_COUNT
+            else
+                ; button held until repeat counter expires
+                if     pressed_button = 1 then
+                    gosub button_1_repeat
+                elseif pressed_button = 2 then
+                    gosub button_2_repeat
+                elseif pressed_button = 4 then
+                    gosub button_3_repeat
+                elseif pressed_button = 8 then
+                    gosub button_4_repeat
+                endif
+                button_end_count = BUTTON_NEXT_REPEAT_COUNT
+            endif
+            button_counter = 0
+        endif
+    endif
+
+    return
+
+;=============================================================================
+button_cancel_repeat:
+    pressed_button = 0
+    return
+
+;=============================================================================

@@ -1,0 +1,180 @@
+;=============================================================================
+
+#define DO_TURNTABLE
+#define DO_LOCONET
+#define DO_LONG_EEPROM_FUNCTIONS
+#define USE_PIC_INTERNAL_EEPROM
+
+INCLUDE "ProcessorConfiguration.pbp"
+
+CLEAR       ; zero all variables
+goto init   ; skip over interrupt service routine
+
+INCLUDE "Interrupt.pbp"
+
+;=============================================================================
+operate_mode        var byte
+    MODE_OPERATE    con 0
+    MODE_PROGRAM    con 1
+
+loconet_switch      var word
+
+display_update_needed  var bit
+
+;=============================================================================
+INCLUDE "LED.pbp"
+INCLUDE "LCD4X20.pbp"
+INCLUDE "EEPROM.pbp"
+INCLUDE "OnboardSwitches.pbp"
+INCLUDE "LOCONET.pbp"
+#if __PROCESSOR__ = "16F886"
+INCLUDE "PCF8591.pbp"
+#endif
+INCLUDE "LongMath.pbp"
+INCLUDE "TurnTable.pbp"
+
+;=============================================================================
+display_long:
+    if (long_result[0] = $ffff) and (long_result[1] = $ffff) then
+        ; no translation found
+        ARRAYWRITE DisplayString, ["??? ", 0]
+    else
+        ARRAYWRITE DisplayString, [hex long_result[1], hex4 long_result[0], " ", 0]
+    endif
+    goto display_write_string
+
+;=============================================================================
+update_display:
+    DisplayRow = 0
+    DisplayCol = 0
+    gosub display_set_cursor
+    if loconet_switch != $ffff then
+        ARRAYWRITE DisplayString, [dec loconet_switch+1, " ", 0]
+    else
+        ARRAYWRITE DisplayString, ["??? ", 0]
+    endif
+    gosub display_write_string
+
+    long_result[0] = tt_position[0]
+    long_result[1] = tt_position[1]
+    gosub display_long
+
+    long_result[0] = current_tt_loc[0]
+    long_result[1] = current_tt_loc[1]
+    gosub display_long
+
+    gosub display_clear_to_end_of_line
+
+    DisplayCol = DISPLAY_COLUMNS-1
+    gosub display_set_cursor
+    if operate_mode = MODE_OPERATE then
+        ARRAYWRITE DisplayString, ["O", 0]
+    elseif operate_mode = MODE_PROGRAM then
+        ARRAYWRITE DisplayString, ["P", 0]
+    endif
+    goto display_write_string
+
+;=============================================================================
+operate_switch_on:
+    if operate_mode != MODE_OPERATE then 
+        operate_mode = MODE_OPERATE
+    endif
+    return
+
+operate_switch_off:
+    if operate_mode != MODE_PROGRAM then 
+        operate_mode = MODE_PROGRAM
+    endif
+    return
+
+
+;=============================================================================
+button_1_pressed:
+    if operate_mode = MODE_OPERATE then
+operate_up_key:
+        gosub turntable_previous_location
+    elseif operate_mode = MODE_PROGRAM then
+        gosub turntable_clockwise
+    endif
+    return
+
+button_2_pressed:
+    if operate_mode = MODE_OPERATE then
+operate_down_key:
+        gosub turntable_next_location
+    elseif operate_mode = MODE_PROGRAM then
+        gosub turntable_counterclockwise
+    endif
+    return
+
+button_3_pressed:
+    ; enter key
+    if operate_mode = MODE_OPERATE then
+        goto turntable_goto_position
+    elseif operate_mode = MODE_PROGRAM then
+        goto turntable_translate
+    else
+        return
+    endif
+
+button_4_pressed:
+    if operate_mode = MODE_OPERATE then
+        ; nop
+        return
+    elseif operate_mode = MODE_PROGRAM then
+        goto turntable_set_zero
+    else
+        return
+    endif
+
+;=============================================================================
+button_1_repeat:
+    if operate_mode = MODE_OPERATE then
+        goto operate_up_key
+    elseif operate_mode = MODE_PROGRAM then
+        goto turntable_increase_speed
+    endif
+
+button_2_repeat:
+    if operate_mode = MODE_OPERATE then
+        goto operate_down_key
+    elseif operate_mode = MODE_PROGRAM then
+        goto turntable_increase_speed
+    endif
+
+button_3_repeat:
+button_4_repeat:
+    goto button_cancel_repeat
+
+;=============================================================================
+button_1_released:
+button_2_released:
+    if operate_mode = MODE_PROGRAM then
+        goto turntable_stop
+    endif
+button_3_released:
+button_4_released:
+    return
+
+;=============================================================================
+init:
+gosub led_initialize
+gosub display_initialize
+gosub loconet_initialize 
+gosub turntable_initialize
+gosub interrupt_initialize 
+
+if PORTC.1 then
+    operate_mode = MODE_OPERATE
+else
+    operate_mode = MODE_PROGRAM
+endif
+
+;=============================================================================
+
+INCLUDE "Mainloop.pbp"
+
+;=============================================================================
+
+    End
+

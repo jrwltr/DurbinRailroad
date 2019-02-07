@@ -1,0 +1,370 @@
+;????don't go past zero
+;????don't go past 360?
+
+;=============================================================================
+TT_XOR  var PortA.6
+TT_DIR1 var PortC.2
+TT_DIR2 var PortB.0
+
+tt_position         var word[2]
+current_tt_loc      var word[2]
+last_switch_request var word
+
+MAX_TT_STOPS            con 40
+
+;=============================================================================
+
+CURRENT_LOCATION_EEPROM_ADDRESS con 0
+    ; the address in EEPROM where the current turntable position is stored
+TRANSLATE_TABLE_EEPROM_ADDRESS  con 4 
+    ; the address in EEPROM where the turntable translate table is stored
+
+NUM_DAC_VALUES  con 15
+DACValues   var byte[NUM_DAC_VALUES]
+DACValIndex var byte
+
+;=============================================================================
+turntable_set_zero:
+    current_tt_loc[0] = 0
+    current_tt_loc[1] = 0
+turntable_save_current_location:
+    ; save location in EEPROM
+    ee_address = CURRENT_LOCATION_EEPROM_ADDRESS
+    ee_long[0] = current_tt_loc[0]
+    ee_long[1] = current_tt_loc[1]
+    goto eeprom_write_long
+
+;=============================================================================
+Timer1 var word[2]
+T var word
+read_timer_1:
+    Timer1[1] = 0
+    do
+        T.byte0 = TMR1L
+        T.byte1 = TMR1H
+        if PIR1.0 then
+            ;timer overlowed
+            Timer1[1] = 1
+        endif
+        ; if timer ticked while reading, read again
+    loop until T.byte0 == TMR1L
+    Timer1[0] = T
+    return
+
+;=============================================================================
+start_timer1:
+    ; start timer1 in counter mode
+    T1CON.0 = 0     ; T1CON.TMR1ON = 0   disable timer 1
+    PIR1.0 = 0      ; PIR1.TMR1IF = 0  turn off timer1 interrupt flag
+    TMR1H = 0       ; TMR1H:TMR1L = 0
+    TMR1L = 0       ;
+    T1CON.0 = 1     ; T1CON.TMR1ON = 1   enable timer 1
+    return
+
+;=============================================================================
+StepCounts  var word[2]
+
+WaitOneStep:
+    do
+        gosub read_timer_1
+        long_minuend[0] = Timer1[0]
+        long_minuend[1] = Timer1[1]
+        gosub long_subtract
+
+        ; temporarily use long_addend1 to save the subtrahend
+        long_addend1[0] = long_subtrahend[0]
+        long_addend1[1] = long_subtrahend[1]
+
+        long_minuend[0] = long_result[0]
+        long_minuend[1] = long_result[1]
+        long_subtrahend[0] = StepCounts[0]
+        long_subtrahend[1] = StepCounts[1]
+        gosub long_subtract
+
+        ; restore original subtrahend
+        long_subtrahend[0] = long_addend1[0]
+        long_subtrahend[1] = long_addend1[1]
+
+    loop until (long_result[1] & $8000) = 0
+
+    long_subtrahend[0] = Timer1[0]
+    long_subtrahend[1] = Timer1[1]
+
+    return
+
+;=============================================================================
+CounterStop     var word[2]  ; number of counts before stopping timer
+Clockwise       var bit
+
+turntable_goto_position:
+    if (current_tt_loc[0] = $ffff) and (current_tt_loc[0] = $ffff) then return
+
+    long_minuend[0] = tt_position[0]
+    long_minuend[1] = tt_position[1]
+    long_subtrahend[0] = current_tt_loc[0]
+    long_subtrahend[1] = current_tt_loc[1]
+    gosub long_subtract
+
+    if (long_result[0] = 0) and (long_result[1] = 0) then 
+        ;tt_position = current_tt_loc
+        return
+    elseif long_result[1] & $8000 then
+        ;tt_position < current_tt_loc
+
+        long_minuend[0] = current_tt_loc[0]
+        long_minuend[1] = current_tt_loc[1]
+        long_subtrahend[0] = tt_position[0]
+        long_subtrahend[1] = tt_position[1]
+        gosub long_subtract
+
+        Clockwise = 0
+    else
+        ;tt_position > current_tt_loc
+        Clockwise = 1
+    endif
+    CounterStop[0] = long_result[0]
+    CounterStop[1] = long_result[1]
+
+    STEP_COUNTS     con 200 ; number of turntable counts at each DAC step
+
+    RampSteps   var word
+
+    long_minuend[0] = CounterStop[0]
+    long_minuend[1] = CounterStop[1]
+    long_subtrahend[0] = NUM_DAC_VALUES * STEP_COUNTS * 2
+    long_subtrahend[1] = 0
+    gosub long_subtract
+    if (long_result[1] & $8000) == 0 then
+        RampSteps = NUM_DAC_VALUES
+    else
+        RampSteps = CounterStop[0] / (STEP_COUNTS * 2)
+        long_subtrahend[0] = RampSteps * STEP_COUNTS * 2
+        long_subtrahend[1] = 0
+        gosub long_subtract
+    endif
+    MaxSpeedCounts  var word[2]
+    MaxSpeedCounts[0] = long_result[0]
+    MaxSpeedCounts[1] = long_result[1]
+
+    ; start the turntable
+    if Clockwise then
+        gosub turntable_clockwise
+    else
+        gosub turntable_counterclockwise
+    endif
+    
+    if RampSteps != 0 then
+        long_subtrahend[0] = 0
+        long_subtrahend[1] = 0
+        ; ramp up the turntable speed
+        StepCounts[0] = STEP_COUNTS
+        StepCounts[1] = 0
+        for DACValIndex = 0 to RampSteps-1
+            gosub set_dac
+            gosub WaitOneStep
+        next DACValIndex
+
+        if (MaxSpeedCounts[0] != 0) or (MaxSpeedCounts[1] != 0) then
+            StepCounts[0] = MaxSpeedCounts[0]
+            StepCounts[1] = MaxSpeedCounts[1]
+            gosub WaitOneStep
+        endif
+
+        ; ramp down the turntable speed
+        StepCounts[0] = STEP_COUNTS
+        StepCounts[1] = 0
+        do
+            DACValIndex = DACValIndex - 1
+            gosub set_dac
+            if DACValIndex = 0 then exit
+            gosub WaitOneStep
+        loop
+    endif
+    long_minuend[0] = CounterStop[0]
+    long_minuend[1] = CounterStop[1]
+    do
+        gosub read_timer_1
+        long_subtrahend[0] = Timer1[0]
+        long_subtrahend[1] = Timer1[1]
+        gosub long_subtract
+    loop until ((long_result[0] = 0) and (long_result[1] = 0)) or (long_result[1] & $8000)
+turntable_stop:
+    if TT_DIR1 = 0 and TT_DIR2 = 0 then return  ; if already stopped return
+    TT_DIR1 = 0     ; stop the turntable
+    TT_DIR2 = 0     ;
+#if __PROCESSOR__ = "16F1783"
+    DACCON1 = 0
+#endif
+#if __PROCESSOR__ = "16F886"
+    DAC_value = 0
+    gosub DAC_write
+#endif
+
+    pause 70        ; about 70 milliseconds before turntable stops moving at full speed
+    T1CON.0 = 0     ; T1CON.TMR1ON = 0   disable timer 1
+
+    gosub read_timer_1
+    if TT_XOR = 1 then
+        ; clockwise, current_tt_loc = current_tt_loc + Timer1
+        long_addend1[0] = current_tt_loc[0]
+        long_addend1[1] = current_tt_loc[1]
+        long_addend2[0] = Timer1[0]
+        long_addend2[1] = Timer1[1]
+        gosub long_add
+    else
+        ; counter clockwise, current_tt_loc = current_tt_loc - Timer1
+        long_minuend[0] = current_tt_loc[0]
+        long_minuend[1] = current_tt_loc[1]
+        long_subtrahend[0] = Timer1[0]
+        long_subtrahend[1] = Timer1[1]
+        gosub long_subtract
+    endif
+    current_tt_loc[0] = long_result[0]
+    current_tt_loc[1] = long_result[1]
+    goto turntable_save_current_location
+
+;=============================================================================
+set_initial_dac:
+    DACValIndex = 0
+set_dac:
+#if __PROCESSOR__ = "16F1783"
+    DACCON1 = DACValues[DACValIndex]
+    return
+#endif
+#if __PROCESSOR__ = "16F886"
+    DAC_value = DACValues[DACValIndex]
+    goto DAC_write
+#endif
+
+;=============================================================================
+turntable_increase_speed:
+    if DACValIndex < NUM_DAC_VALUES-1 then
+        DACValIndex = DACValIndex + 1
+        goto set_dac
+    endif
+    return
+
+;=============================================================================
+turntable_clockwise:
+    gosub set_initial_dac
+    gosub start_timer1
+    TT_XOR  = 1
+    TT_DIR1 = 1
+    TT_DIR2 = 0
+    return
+
+;=============================================================================
+turntable_counterclockwise:
+    gosub set_initial_dac
+    gosub start_timer1
+    TT_XOR  = 0
+    TT_DIR1 = 0
+    TT_DIR2 = 1
+    return
+
+;=============================================================================
+switch  var word
+
+turntable_first_location:
+    loconet_switch = $ffff
+    goto turntable_find_next
+turntable_next_location:
+    if loconet_switch != $ffff then
+        if loconet_switch = MAX_TT_STOPS - 1 then return
+turntable_find_next:
+        for switch = loconet_switch + 1 to MAX_TT_STOPS - 1
+            ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS+(switch*4)
+            gosub eeprom_read_long
+            long_result[0] = ee_long[0]
+            long_result[1] = ee_long[1]
+            if (long_result[0] != $ffff) or (long_result[1] != $ffff) then
+                tt_position[0] = long_result[0]
+                tt_position[1] = long_result[1]
+                loconet_switch = switch
+                exit
+            endif
+        next switch
+    endif
+    return
+
+;=============================================================================
+turntable_previous_location:
+    if loconet_switch != $ffff then
+        if loconet_switch = 0 then return
+        for switch = loconet_switch - 1 to 0 step -1
+            ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS + (switch * 4)
+            gosub eeprom_read_long
+            if (ee_long[0] != $ffff) or (ee_long[1] != $ffff) then
+                tt_position[0] = ee_long[0]
+                tt_position[1] = ee_long[1]
+                loconet_switch = switch
+                exit
+            endif
+        next switch
+    endif
+    return
+
+;=============================================================================
+handle_switch_request:
+    if (loconet_switch >= MAX_TT_STOPS) then 
+        loconet_switch = last_switch_request
+        return
+    endif
+    last_switch_request = loconet_switch 
+    ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS+(last_switch_request*4)
+    gosub eeprom_read_long
+    tt_position[0] = ee_long[0]
+    tt_position[1] = ee_long[1]
+
+    if (tt_position[0] = $ffff) and (tt_position[1] = $ffff) then return
+    if operate_mode != MODE_OPERATE then return
+    goto turntable_goto_position
+
+;=============================================================================
+turntable_translate:
+    if (loconet_switch = $ffff) or ((current_tt_loc[0] = $ffff) and (current_tt_loc[1] = $ffff)) then return
+    ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS+(loconet_switch*4)
+    ee_long[0] = current_tt_loc[0]
+    ee_long[1] = current_tt_loc[1]
+    gosub eeprom_write_long
+    tt_position[0] = current_tt_loc[0]
+    tt_position[1] = current_tt_loc[1]
+    return
+
+;=============================================================================
+turntable_initialize:
+#if __PROCESSOR__ = "16F1783"
+    APFCON.6 = 1
+#endif
+    TT_DIR1 = 0
+    TT_DIR2 = 0
+#if __PROCESSOR__ = "16F1783"
+    DACCON1 = 0
+    DACCON0 = 0
+    DACCON0.4 = 1   ; DACCON0.DACOE2 = 0    DAC is output to DACOUT2 pin
+    DACCON0.7 = 1   ; DACCON0.DACEN = 1     enable DAC 
+#endif
+
+    ARRAYWRITE DACValues, [ 16, 32, 34, 41, 53, 69, 88, 110, 134, 159, 184, 208, 230, 249, 255]
+        ; DACValues are based on a sin wave
+
+    last_switch_request = $ffff
+    tt_position[0] = $ffff
+    tt_position[1] = $ffff
+
+    ; initialize timer 1
+    TRISC.0 = 1     ; RC0 is input
+#if __PROCESSOR__ = "16F1783"
+    T1GCON = 0      ; disable Timer1 gate control
+#endif
+    T1CON = $84     ; clock source is T1CKI, prescale = 1:1, don't synchronize
+
+    ee_address = CURRENT_LOCATION_EEPROM_ADDRESS
+    gosub eeprom_read_long
+    current_tt_loc[0] = ee_long[0]
+    current_tt_loc[1] = ee_long[1]
+
+    goto turntable_first_location
+
+;=============================================================================
+

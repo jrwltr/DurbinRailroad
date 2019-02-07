@@ -1,0 +1,48 @@
+;=============================================================================
+; This is the mainloop of the program
+;=============================================================================
+display_update_needed = 1
+mainloop:
+    if display_update_needed then 
+#if __PROCESSOR__ = "16F886"
+        INTCON.7 = 0 ; INTCON.GIE = 0;????avoid stack problems?
+#endif
+        gosub update_display
+#if __PROCESSOR__ = "16F886"
+        INTCON.7 = 1 ; INTCON.GIE = 1;????avoid stack problems?
+#endif
+        display_update_needed = 0
+    endif
+
+#ifdef DO_POWER_DOWN
+    gosub power_down_check
+#endif
+
+#ifdef DO_LOCONET
+    goto loconet_receive
+loconet_receive_return: ;????
+#endif
+
+    timer var byte
+    INTCON.7 = 0 ; INTCON.GIE = 0
+    timer = timer0_interrupt
+    timer0_interrupt = 0
+    INTCON.7 = 1 ; INTCON.GIE = 1
+    if timer then
+#if __PROCESSOR__ = "16F886"
+        INTCON.7 = 0 ; INTCON.GIE = 0;????avoid stack problems?
+#endif
+#ifdef DO_SWITCHMOTOR
+        gosub switch_motor_button_check
+#endif
+        gosub onboard_switch_check
+#if __PROCESSOR__ = "16F886"
+        INTCON.7 = 1 ; INTCON.GIE = 1;????avoid stack problems?
+#endif
+        gosub led_check
+    endif
+
+    Goto mainloop
+
+;=============================================================================
+

@@ -1,0 +1,264 @@
+
+;=============================================================================
+
+#define DO_SWITCHMOTOR
+#define DO_LOCONET
+
+INCLUDE "ProcessorConfiguration.pbp"
+
+CLEAR       ; zero all variables
+goto init   ; skip over interrupt service routine
+
+INCLUDE "Interrupt.pbp"
+
+;=============================================================================
+operate_mode        var byte
+    MODE_OPERATE    con 0
+    MODE_PROGRAM    con 1
+    MODE_ROUTE_EDIT con 2
+
+;=============================================================================
+switch_motor        var byte
+loconet_switch      var word
+loconet_sw_motor    var byte
+
+display_update_needed  var bit
+
+;=============================================================================
+INCLUDE "LED.pbp"
+INCLUDE "LCD4X20.pbp"
+INCLUDE "EEPROM.pbp"
+INCLUDE "OnboardSwitches.pbp"
+INCLUDE "LOCONET.pbp"
+INCLUDE "SwitchMotor.pbp"
+
+;=============================================================================
+update_display:
+    DisplayRow = 0
+    DisplayCol = 0
+    gosub display_set_cursor
+
+    if operate_mode != MODE_ROUTE_EDIT then
+        if loconet_switch != $ffff then
+            ARRAYWRITE DisplayString, [dec loconet_switch+1, 0]
+        else
+            ARRAYWRITE DisplayString, ["???", 0]
+        endif
+        gosub display_write_string
+
+        if route_number == ROUTE_NOT_FOUND then
+            switch_motor_to_throw = loconet_sw_motor
+            if operate_mode = MODE_OPERATE then
+                if switch_motor_to_throw != $ff then
+                    gosub switch_motor_read
+                    if switch_motor_state = SWITCH_MOTOR_THROWN then
+                        ARRAYWRITE DisplayString, ["=T", 0]
+                    else
+                        ARRAYWRITE DisplayString, ["=C", 0]
+                    endif
+                else
+                    ARRAYWRITE DisplayString, ["=?", 0]
+                endif
+                gosub display_write_string
+            endif
+            if operate_mode = MODE_PROGRAM then
+                if loconet_sw_motor != $ff then
+                    ARRAYWRITE DisplayString, [ ">", dec loconet_sw_motor+1, 0]
+                else
+                    ; no translation found
+                    ARRAYWRITE DisplayString, [">???", 0]
+                endif
+                gosub display_write_string
+            endif
+        else
+            ARRAYWRITE DisplayString, [">ROUTE", 0]
+            gosub display_write_string
+        endif
+        gosub display_clear_to_end_of_line
+
+        DisplayRow = 1
+        DisplayCol = 0
+        gosub display_set_cursor
+        if operate_mode = MODE_PROGRAM then
+            ARRAYWRITE DisplayString, ["DEL RTE", 0]
+            gosub display_write_string
+        endif
+        gosub display_clear_to_end_of_line
+    else
+        if route_num_switches = 0 then
+            ARRAYWRITE DisplayString, ["???=?", 0]
+        else
+            ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS + ((route_switches[route_switch_index] & $7f) * 2)
+            gosub eeprom_read_word
+            ARRAYWRITE DisplayString, [dec ee_word+1, 0]
+            gosub display_write_string
+
+            if route_switches[route_switch_index] & $80 then
+                ARRAYWRITE DisplayString, ["=T", 0]
+            else
+                ARRAYWRITE DisplayString, ["=C", 0]
+            endif
+        endif
+        gosub display_write_string
+        gosub display_clear_to_end_of_line
+        DisplayRow = 1
+        DisplayCol = 0
+        gosub display_set_cursor
+        ARRAYWRITE DisplayString, ["UP  DWN YES NO", 0]
+        gosub display_write_string
+        gosub display_clear_to_end_of_line
+    endif
+
+    DisplayRow = 0
+    DisplayCol = DISPLAY_COLUMNS-1
+    gosub display_set_cursor
+    if operate_mode = MODE_OPERATE then
+        ARRAYWRITE DisplayString, ["O", 0]
+    elseif operate_mode = MODE_PROGRAM then
+        ARRAYWRITE DisplayString, ["P", 0]
+    elseif operate_mode = MODE_ROUTE_EDIT then
+        ARRAYWRITE DisplayString, ["R", 0]
+    endif
+    goto display_write_string
+
+;=============================================================================
+; operate_switch_on is called when the program/operate switch is switched
+; to the operate position
+;
+operate_switch_on:
+    if operate_mode != MODE_OPERATE then 
+        if operate_mode = MODE_ROUTE_EDIT then
+            gosub route_cancel
+        endif
+        operate_mode = MODE_OPERATE
+    endif
+    return
+
+; operate_switch_off is called when the program/operate switch is switched
+; to the program position
+;
+operate_switch_off:
+    if operate_mode = MODE_OPERATE then 
+        operate_mode = MODE_PROGRAM
+    endif
+    return
+
+;=============================================================================
+; button_1_pressed is called when the onboard PB1 button is pressed
+button_1_pressed:
+    if operate_mode = MODE_PROGRAM then
+        goto program_delete_key
+    elseif operate_mode = MODE_ROUTE_EDIT then
+        goto route_up_key
+#ifdef ERASE_EEPROM
+    elseif operate_mode = MODE_OPERATE then
+        gosub switch_motor_erase_eeprom
+#endif
+    endif
+    return
+
+; button_2_pressed is called when the onboard PB2 button is pressed
+button_2_pressed:
+    if operate_mode = MODE_PROGRAM then
+        goto program_route_key
+    elseif operate_mode = MODE_ROUTE_EDIT then
+        goto route_down_key
+    endif
+    return
+
+; button_3_pressed is called when the onboard PB3 button is pressed
+button_3_pressed:
+    if operate_mode = MODE_ROUTE_EDIT then
+        goto route_enter_key
+    endif
+    return
+
+; button_4_pressed is called when the onboard PB4 button is pressed
+button_4_pressed:
+    if operate_mode = MODE_ROUTE_EDIT then
+        goto route_no_key
+    endif
+    return
+
+;=============================================================================
+; button_X_repeat is called when an onboard PBX button is pressed and 
+; held until the repeat timer expires.
+;
+button_4_repeat:
+    if operate_mode = MODE_ROUTE_EDIT then
+        gosub route_no_key_repeat
+    endif
+button_1_repeat:
+button_2_repeat:
+button_3_repeat:
+    goto button_cancel_repeat
+
+;=============================================================================
+; button_X_released is called when an onboard PBX button is released
+;
+button_1_released:
+button_2_released:
+button_3_released:
+button_4_released:
+    return
+
+;=============================================================================
+program_delete_key:
+    if loconet_switch = $ffff then return
+    if route_number != ROUTE_NOT_FOUND then
+        route_number = loconet_switch
+        goto route_delete
+    else
+        if (loconet_sw_motor = $ff) then return
+        goto switch_motor_map_delete
+    endif
+
+program_route_key
+    if (loconet_switch = $ffff) then return
+    if (loconet_sw_motor = $ff) then
+        gosub switch_motor_map_delete
+    endif
+    operate_mode = MODE_ROUTE_EDIT
+    route_number = loconet_switch
+    goto route_read
+
+;=============================================================================
+route_up_key:
+    goto route_previous_switch
+
+route_down_key:
+    goto route_next_switch
+
+route_enter_key:
+    operate_mode = MODE_PROGRAM
+    goto route_save
+
+route_no_key:
+    goto route_delete_switch
+
+route_no_key_repeat:
+    operate_mode = MODE_PROGRAM
+    goto route_cancel
+
+;=============================================================================
+init:
+gosub led_initialize
+gosub display_initialize
+gosub loconet_initialize 
+gosub switch_motor_initialize
+gosub interrupt_initialize 
+
+if PORTC.1 then
+    operate_mode = MODE_OPERATE
+else
+    operate_mode = MODE_PROGRAM
+endif
+
+;=============================================================================
+
+INCLUDE "Mainloop.pbp"
+
+;=============================================================================
+
+    End
+

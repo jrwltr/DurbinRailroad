@@ -1,0 +1,61 @@
+;=============================================================================
+long_addend1    var word[2] bank0 system
+long_addend2    var word[2] bank0 system
+long_minuend    var word[2] bank0 system
+long_subtrahend var word[2] bank0 system
+long_result     var word[2] bank0 system
+
+;=============================================================================
+#if __PROCESSOR__ = "16F1783"
+long_add:
+ASM
+    clrf    BSR                             ; set bank to 0
+
+    movfw   long_addend1
+    addwf   long_addend2   , w
+    movwf   long_result
+
+    movfw   long_addend1 + 1
+    addwfc  long_addend2 + 1, w
+    movwf   long_result  + 1
+
+    movfw   long_addend1 + 2
+    addwfc  long_addend2 + 2, w
+    movwf   long_result  + 2
+
+    movfw   long_addend1 + 3
+    addwfc  long_addend2 + 3, w
+    movwf   long_result  + 3
+
+    return
+ENDASM
+#endif
+
+;=============================================================================
+#if __PROCESSOR__ = "16F1783"
+long_subtract:
+ASM
+    clrf    BSR                             ; set bank to 0
+
+    movfw   long_subtrahend
+    subwf   long_minuend       , w
+    movwf   long_result
+
+    movfw   long_subtrahend + 1
+    subwfb  long_minuend    + 1, w
+    movwf   long_result     + 1
+
+    movfw   long_subtrahend + 2
+    subwfb  long_minuend    + 2, w
+    movwf   long_result     + 2
+
+    movfw   long_subtrahend + 3
+    subwfb  long_minuend    + 3, w
+    movwf   long_result     + 3
+
+    return
+ENDASM
+#endif
+ 
+;=============================================================================
+

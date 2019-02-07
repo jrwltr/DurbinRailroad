@@ -1,0 +1,160 @@
+;=============================================================================
+OPC_SW_REQ  con $B0 ;LOCONET opcode for a switch request
+
+RX_PACKET_LEN   con 2
+    ; RX_PACKET_LEN is the number of bytes that will be saved from 
+    ; each LOCONET packet.  It does not include the packet opcode or checksum.
+    ; It's only big enough to contain the largest packet parsed by this code.
+    ; If you want to parse a longer packet, just change this value.
+
+
+;=============================================================================
+rx_byte             var byte
+rx_opcode           var byte                ; opcode from the last received packet 
+rx_checksum         var byte
+rx_packet           var byte[RX_PACKET_LEN] ; a buffer to contain the packet contents
+rx_packet_index     var byte                ; index into rx_packet buffer
+rx_packet_length    var byte                ; number of bytes left in the packet being received
+
+rx_state var byte                           ; current state of the receive state machine
+    RX_STATE_WAITING_FOR_OPCODE con 0
+    RX_STATE_WAITING_FOR_LENGTH con 1
+    RX_STATE_ACCUMULATING       con 2
+
+
+;=============================================================================
+;sample transmit code that we don't use at this time...
+;
+;LOCONET_MAX_TX_COUNT    con 5
+;
+;loconet_tx_string var byte[LOCONET_MAX_TX_COUNT]
+;
+;loconet_transmit:
+;    ii var byte
+;    for ii = 0 to LOCONET_MAX_TX_COUNT-1
+;        if loconet_tx_string[ii] = 0 then exit
+;            ; this isn't a reasonable test, prevents transmitting a zero
+;            ; needs a better way to know transmit string length
+;        while PIR1.4 = 0 ; while PIR1.TXIF = 0  wait for TXREG empty
+;        wend
+;        TXREG = loconet_tx_string[ii]
+;    next ii
+;    return
+
+;=============================================================================
+switch_motor_direction  var byte
+    SWITCH_MOTOR_THROWN con $00
+    SWITCH_MOTOR_CLOSED con $20 ;this corresponds to the bit in the OPC_SW_REQ command
+    SWITCH_MOTOR_TOGGLE con $80
+
+;=============================================================================
+loconet_receive:
+    while rx_head != rx_tail 
+        rx_byte = rx_data_fifo[rx_head]
+#ifdef SHOW_RX_DATA
+        if rx_byte.7 then
+            DisplayRow = DISPLAY_ERROR_ROW
+            DisplayCol = 0
+            gosub display_set_cursor
+            gosub display_clear_to_end_of_line
+            DisplayRow = DISPLAY_ERROR_ROW
+            DisplayCol = 0
+            gosub display_set_cursor
+        endif
+        if DisplayCol < DISPLAY_ROWS-3 then
+            ARRAYWRITE DisplayString, [hex rx_byte, " ", 0]
+            gosub display_write_string
+        endif
+#endif
+        if rx_byte.7 then
+            ; found an opcode
+            rx_opcode = rx_byte
+            rx_checksum = rx_byte
+            if rx_byte.6 then
+                if rx_byte.5 then
+                    ; next recieved byte is packet length
+                    rx_state = RX_STATE_WAITING_FOR_LENGTH
+                else
+                    rx_packet_length = 5
+                    rx_state = RX_STATE_ACCUMULATING
+                endif
+            else
+                if rx_byte.5 then
+                    rx_packet_length = 3
+                else
+                    rx_packet_length = 1
+                endif
+                rx_state = RX_STATE_ACCUMULATING
+            endif
+            rx_packet_index = 0
+        else
+            rx_checksum = rx_checksum ^ rx_byte
+            if rx_state = RX_STATE_ACCUMULATING then
+                rx_packet_length = rx_packet_length - 1
+                if rx_packet_length = 0 then
+                    rx_state = RX_STATE_WAITING_FOR_OPCODE
+                    if rx_checksum = $ff then
+                        ; valid packet received
+                        led_to_change = LED_LOCONET_PKT
+                        gosub led_flash
+                        if (rx_opcode = OPC_SW_REQ) and (rx_packet[1] & $10) then 
+                            ; key was pressed on CAB
+                            display_update_needed = 1
+                            loconet_switch = ((rx_packet[1] & $f) << 7) + rx_packet[0]
+                            switch_motor_direction = rx_packet[1] & SWITCH_MOTOR_CLOSED
+#if __PROCESSOR__ = "16F886"
+                            INTCON.7 = 0 ; INTCON.GIE = 0;????avoid stack problems?
+#endif
+                            gosub handle_switch_request
+#if __PROCESSOR__ = "16F886"
+                            INTCON.7 = 1 ; INTCON.GIE = 1;????avoid stack problems?
+#endif
+                        endif
+                    endif
+                else
+                    if rx_packet_index < RX_PACKET_LEN then
+                        rx_packet[rx_packet_index] = rx_byte
+                        rx_packet_index = rx_packet_index + 1
+                    endif
+                endif
+            elseif rx_state = RX_STATE_WAITING_FOR_LENGTH then
+                rx_packet_length = rx_byte
+                rx_state = RX_STATE_ACCUMULATING
+            endif
+        endif
+        rx_head = rx_head + 1
+        if rx_head = RXFIFO_SIZE then rx_head = 0
+    wend
+    goto loconet_receive_return
+
+;=============================================================================
+loconet_initialize:
+    rx_state = RX_STATE_WAITING_FOR_OPCODE
+
+#if __PROCESSOR__ = "16F1783"
+    APFCON.2 = 0    ; APFCON.TXSEL = 0  TX is on RC6
+    APFCON.1 = 0    ; APFCON.RXSEL = 0  RX is on RC7
+    TXSTA = $20     ; TX9 = 0, TXEN = 1, SYNC = 0, BRGH = 0
+    BAUDCON = $10   ; SCKP = 1, BRG16 = 0   
+        ;SCKP = 1 inverts transmit for loopback testing
+    SP1BRGH = 0
+    SP1BRGL = 29    ; SP1RGH:SP1BRGL = ((OSC * 1000000) / (64 * 16500)) - 1
+                    ;    OSC = 32
+                    ;    64 is divisor chosen by SYNC, BRGH and BRG16
+                    ;    16500 is the desired baud rate
+#endif
+#if __PROCESSOR__ = "16F886"
+    TXSTA = $24     ; TX9 = 0, TXEN = 1, SYNC = 0, BRGH = 1
+    BAUDCTL = $18   ; SCKP = 1, BRG16 = 1   
+        ;SCKP = 1 inverts transmit for loopback testing
+    SPBRGH = 0
+    SPBRG  = 120    ; SPRGH:SPBRG = ((OSC * 1000000) / (4 * 16500)) - 1
+                    ;    OSC = 8
+                    ;    4 is divisor chosen by SYNC, BRGH and BRG16
+                    ;    16500 is the desired baud rate
+#endif
+    loconet_switch = $ffff
+    return
+
+;=============================================================================
+
