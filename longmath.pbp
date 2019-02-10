@@ -6,7 +6,6 @@ long_subtrahend var word[2] bank0 system
 long_result     var word[2] bank0 system
 
 ;=============================================================================
-#if __PROCESSOR__ = "16F1783"
 long_add:
 ASM
     clrf    BSR                             ; set bank to 0
@@ -29,10 +28,8 @@ ASM
 
     return
 ENDASM
-#endif
 
 ;=============================================================================
-#if __PROCESSOR__ = "16F1783"
 long_subtract:
 ASM
     clrf    BSR                             ; set bank to 0
@@ -55,7 +52,6 @@ ASM
 
     return
 ENDASM
-#endif
  
 ;=============================================================================
 
