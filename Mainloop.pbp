@@ -4,13 +4,7 @@
 display_update_needed = 1
 mainloop:
     if display_update_needed then 
-#if __PROCESSOR__ = "16F886"
-        INTCON.7 = 0 ; INTCON.GIE = 0;????avoid stack problems?
-#endif
         gosub update_display
-#if __PROCESSOR__ = "16F886"
-        INTCON.7 = 1 ; INTCON.GIE = 1;????avoid stack problems?
-#endif
         display_update_needed = 0
     endif
 
@@ -19,8 +13,7 @@ mainloop:
 #endif
 
 #ifdef DO_LOCONET
-    goto loconet_receive
-loconet_receive_return: ;????
+    gosub loconet_receive
 #endif
 
     timer var byte
@@ -29,16 +22,10 @@ loconet_receive_return: ;????
     timer0_interrupt = 0
     INTCON.7 = 1 ; INTCON.GIE = 1
     if timer then
-#if __PROCESSOR__ = "16F886"
-        INTCON.7 = 0 ; INTCON.GIE = 0;????avoid stack problems?
-#endif
 #ifdef DO_SWITCHMOTOR
         gosub switch_motor_button_check
 #endif
         gosub onboard_switch_check
-#if __PROCESSOR__ = "16F886"
-        INTCON.7 = 1 ; INTCON.GIE = 1;????avoid stack problems?
-#endif
         gosub led_check
     endif
 

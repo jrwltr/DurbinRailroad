@@ -29,15 +29,15 @@ rx_state var byte                           ; current state of the receive state
 ;
 ;loconet_tx_string var byte[LOCONET_MAX_TX_COUNT]
 ;
-;loconet_transmit:
+loconet_transmit:
 ;    ii var byte
 ;    for ii = 0 to LOCONET_MAX_TX_COUNT-1
 ;        if loconet_tx_string[ii] = 0 then exit
 ;            ; this isn't a reasonable test, prevents transmitting a zero
 ;            ; needs a better way to know transmit string length
-;        while PIR1.4 = 0 ; while PIR1.TXIF = 0  wait for TXREG empty
+;        while PIR3.4 = 0 ; while PIR3.TXIF = 0  wait for TX1REG empty
 ;        wend
-;        TXREG = loconet_tx_string[ii]
+;        TX1REG = loconet_tx_string[ii]
 ;    next ii
 ;    return
 
@@ -102,13 +102,7 @@ loconet_receive:
                             display_update_needed = 1
                             loconet_switch = ((rx_packet[1] & $f) << 7) + rx_packet[0]
                             switch_motor_direction = rx_packet[1] & SWITCH_MOTOR_CLOSED
-#if __PROCESSOR__ = "16F886"
-                            INTCON.7 = 0 ; INTCON.GIE = 0;????avoid stack problems?
-#endif
                             gosub handle_switch_request
-#if __PROCESSOR__ = "16F886"
-                            INTCON.7 = 1 ; INTCON.GIE = 1;????avoid stack problems?
-#endif
                         endif
                     endif
                 else
@@ -125,35 +119,25 @@ loconet_receive:
         rx_head = rx_head + 1
         if rx_head = RXFIFO_SIZE then rx_head = 0
     wend
-    goto loconet_receive_return
+    return
 
 ;=============================================================================
 loconet_initialize:
     rx_state = RX_STATE_WAITING_FOR_OPCODE
 
-#if __PROCESSOR__ = "16F1783"
-    APFCON.2 = 0    ; APFCON.TXSEL = 0  TX is on RC6
-    APFCON.1 = 0    ; APFCON.RXSEL = 0  RX is on RC7
-    TXSTA = $20     ; TX9 = 0, TXEN = 1, SYNC = 0, BRGH = 0
-    BAUDCON = $10   ; SCKP = 1, BRG16 = 0   
+    RXPPS = $17     ; pin select RX is RC7
+    RC6PPS = $10    ; pin select TX is RC6 as output
+    TX1STA = $20    ; TX9 = 0, TXEN = 1, SYNC = 0, BRGH = 0
+    BAUD1CON = $10  ; SCKP = 1, BRG16 = 0   
         ;SCKP = 1 inverts transmit for loopback testing
     SP1BRGH = 0
     SP1BRGL = 29    ; SP1RGH:SP1BRGL = ((OSC * 1000000) / (64 * 16500)) - 1
                     ;    OSC = 32
                     ;    64 is divisor chosen by SYNC, BRGH and BRG16
                     ;    16500 is the desired baud rate
-#endif
-#if __PROCESSOR__ = "16F886"
-    TXSTA = $24     ; TX9 = 0, TXEN = 1, SYNC = 0, BRGH = 1
-    BAUDCTL = $18   ; SCKP = 1, BRG16 = 1   
-        ;SCKP = 1 inverts transmit for loopback testing
-    SPBRGH = 0
-    SPBRG  = 120    ; SPRGH:SPBRG = ((OSC * 1000000) / (4 * 16500)) - 1
-                    ;    OSC = 8
-                    ;    4 is divisor chosen by SYNC, BRGH and BRG16
-                    ;    16500 is the desired baud rate
-#endif
+
     loconet_switch = $ffff
+
     return
 
 ;=============================================================================

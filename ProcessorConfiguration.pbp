@@ -96,49 +96,30 @@ endasm
 ;    _LVP_OFF	    ;High-voltage on MCLR/VPP must be used for programming
 
 ;=============================================================================
-#if __PROCESSOR__ = "16F1783"
 #CONFIG
-    __config _CONFIG1, _FOSC_INTOSC & _WDTE_OFF & _PWRTE_ON & _MCLRE_OFF & _CP_OFF & _CPD_OFF & _BOREN_ON & _CLKOUTEN_OFF & _IESO_OFF & _FCMEN_OFF
-    __config _CONFIG2, _WRT_OFF & _LVP_OFF & _PLLEN_ON & _STVREN_OFF & _VCAPEN_OFF & _BORV_HI & _LPBOR_OFF
+    __config _CONFIG1, _FEXTOSC_OFF & _RSTOSC_HFINT32 & _CLKOUTEN_OFF & _CSWEN_OFF & _FCMEN_OFF
+    __config _CONFIG2, _MCLRE_ON & _PWRTE_OFF & _LPBOREN_OFF & _BOREN_OFF & _BORV_LO & _ZCD_OFF & _PPS1WAY_OFF & _STVREN_ON & _DEBUG_OFF
+    __config _CONFIG3, _WDTCPS_WDTCPS_11 & _WDTE_OFF & _WDTCWS_WDTCWS_7 & _WDTCCS_LFINTOSC
+    __config _CONFIG4, _WRT_OFF & _SCANE_available & _LVP_OFF
+    __config _CONFIG5, _CP_OFF & _CPD_OFF
 #ENDCONFIG
-#endif
-#if __PROCESSOR__ = "16F886"
-#CONFIG
-    __config _CONFIG1, _INTRC_OSC_NOCLKOUT & _WDT_OFF & _MCLRE_OFF & _LVP_OFF & _CP_OFF
-#ENDCONFIG
-#endif
 
 ;=============================================================================
 ; DEFINEs:
-#if __PROCESSOR__ = "16F1783"
-    define OSC 32       'Internal oscillator operates at 16MHz with X4 PLL and /2 for CPU FOSC
-#endif
-#if __PROCESSOR__ = "16F886"
-    define OSC 8        
-#endif
+define OSC 32
 define I2C_SLOW 1   'Enables using 100KHz I2C device with OSC above 8MHz
 define WRITE_INT 1  'Disables interrupts during EEPROM writes
 
 ;=============================================================================
 ; INITIALIZE REGISTERS:
-OSCCON = %01111000    'Internal Osc set to 16MHz, clock determined by Config FOSC bits
-#if __PROCESSOR__ = "16F1783"
-    ANSELA = %00000000    'Set all pins for digital operation
-    ANSELB = %00000000
-#endif
-#if __PROCESSOR__ = "16F886"
-    ANSEL  = %00000000    'Set all pins for digital operation
-    ANSELH = %00000000
-#endif
+OSCCON1 = %00110000   'Internal Osc set to 16MHz, clock determined by Config FOSC bits
+ANSELA = %00000000    'Set all pins for digital operation
+ANSELB = %00000000
+ANSELC = %00000000
 TRISA  = %10001111    'Set PORTA bits 0, 1, 2, 3, 7 as inputs, the rest as outputs
 TRISB  = %01100000    'Set PORTB bits 5, 6 as inputs, the rest as outputs
 TRISC  = %10100011    'Set PORTC bits 0, 1, 5, 7 as inputs, the rest as outputs
-#if __PROCESSOR__ = "16F1783"
-    WPUA   = %10001111    'Set weak pullups on PORTA bits 0, 1, 2, 3 and 7, the rest as outputs
-#endif
-#if __PROCESSOR__ = "16F886"
-    WPUB   = %10001111    'Set weak pullups on PORTA bits 0, 1, 2, 3 and 7, the rest as outputs
-#endif
+WPUA   = %10001111    'Set weak pullups on PORTA bits 0, 1, 2, 3 and 7, the rest as outputs
 
 ;=============================================================================
 SCL1     var PORTC.3 'IC pin 14 (RC3) is a hard or soft I2C Clock
