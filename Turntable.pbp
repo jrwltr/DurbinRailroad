@@ -192,12 +192,11 @@ turntable_stop:
     if TT_DIR1 = 0 and TT_DIR2 = 0 then return  ; if already stopped return
     TT_DIR1 = 0     ; stop the turntable
     TT_DIR2 = 0     ;
-#if __PROCESSOR__ = "16F1783"
-    DACCON1 = 0
-#endif
-#if __PROCESSOR__ = "16F886"
+#ifdef USE_EXTERNAL_DAC
     DAC_value = 0
     gosub DAC_write
+#else
+    DACCON1 = 0
 #endif
 
     pause 70        ; about 70 milliseconds before turntable stops moving at full speed
@@ -227,13 +226,12 @@ turntable_stop:
 set_initial_dac:
     DACValIndex = 0
 set_dac:
-#if __PROCESSOR__ = "16F1783"
-    DACCON1 = DACValues[DACValIndex]
-    return
-#endif
-#if __PROCESSOR__ = "16F886"
+#ifdef USE_EXTERNAL_DAC
     DAC_value = DACValues[DACValIndex]
     goto DAC_write
+#else
+    DACCON1 = DACValues[DACValIndex]
+    return
 #endif
 
 ;=============================================================================
@@ -333,12 +331,12 @@ turntable_translate:
 
 ;=============================================================================
 turntable_initialize:
-#if __PROCESSOR__ = "16F1783"
+#ifndef USE_EXTERNAL_DAC
     APFCON.6 = 1
 #endif
     TT_DIR1 = 0
     TT_DIR2 = 0
-#if __PROCESSOR__ = "16F1783"
+#ifndef USE_EXTERNAL_DAC
     DACCON1 = 0
     DACCON0 = 0
     DACCON0.4 = 1   ; DACCON0.DACOE2 = 0    DAC is output to DACOUT2 pin
@@ -354,9 +352,7 @@ turntable_initialize:
 
     ; initialize timer 1
     TRISC.0 = 1     ; RC0 is input
-#if __PROCESSOR__ = "16F1783"
     T1GCON = 0      ; disable Timer1 gate control
-#endif
     T1CON = $84     ; clock source is T1CKI, prescale = 1:1, don't synchronize
 
     ee_address = CURRENT_LOCATION_EEPROM_ADDRESS
