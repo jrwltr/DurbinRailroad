@@ -52,19 +52,15 @@ loconet_receive:
     while rx_head != rx_tail 
         rx_byte = rx_data_fifo[rx_head]
 #ifdef SHOW_RX_DATA
-        if rx_byte.7 then
-            DisplayRow = DISPLAY_ERROR_ROW
-            DisplayCol = 0
-            gosub display_set_cursor
-            gosub display_clear_to_end_of_line
-            DisplayRow = DISPLAY_ERROR_ROW
+        SRD_Row var byte
+        SRD_Col var byte
+        if (DisplayRow != 3) or (DisplayCol >= DISPLAY_COLUMNS-3) then
+            DisplayRow = 3
             DisplayCol = 0
             gosub display_set_cursor
         endif
-        if DisplayCol < DISPLAY_ROWS-3 then
-            ARRAYWRITE DisplayString, [hex rx_byte, " ", 0]
-            gosub display_write_string
-        endif
+        ARRAYWRITE DisplayString, [hex rx_byte, " ", 0]
+        gosub display_write_string
 #endif
         if rx_byte.7 then
             ; found an opcode
