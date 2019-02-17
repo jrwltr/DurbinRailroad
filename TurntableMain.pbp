@@ -75,11 +75,12 @@ update_display:
     DisplayCol = 0
     gosub display_set_cursor
     if operate_mode = MODE_OPERATE then
-        ARRAYWRITE DisplayString, ["UP  DWN GO", 0]
+        ARRAYWRITE DisplayString, ["UP  DWN  GO", 0]
     elseif operate_mode = MODE_PROGRAM then
-        ARRAYWRITE DisplayString, ["CW  CCW SET ZRO", 0]
+        ARRAYWRITE DisplayString, ["CW CCW SET ZERO", 0]
     endif
-    goto display_write_string
+    gosub display_write_string
+    goto display_clear_to_end_of_line
 
 
 ;=============================================================================
