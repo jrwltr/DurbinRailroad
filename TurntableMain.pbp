@@ -4,7 +4,6 @@
 #define DO_LOCONET
 #define DO_LONG_EEPROM_FUNCTIONS
 #define USE_PIC_INTERNAL_EEPROM
-#define USE_EXTERNAL_DAC
 
 INCLUDE "ProcessorConfiguration.pbp"
 
@@ -28,9 +27,6 @@ INCLUDE "LCD4X20.pbp"
 INCLUDE "EEPROM.pbp"
 INCLUDE "OnboardSwitches.pbp"
 INCLUDE "LOCONET.pbp"
-#ifdef USE_EXTERNAL_DAC
-INCLUDE "PCF8591.pbp"
-#endif
 INCLUDE "LongMath.pbp"
 INCLUDE "TurnTable.pbp"
 
@@ -73,7 +69,18 @@ update_display:
     elseif operate_mode = MODE_PROGRAM then
         ARRAYWRITE DisplayString, ["P", 0]
     endif
+    gosub display_write_string
+
+    DisplayRow = 1
+    DisplayCol = 0
+    gosub display_set_cursor
+    if operate_mode = MODE_OPERATE then
+        ARRAYWRITE DisplayString, ["UP  DWN GO", 0]
+    elseif operate_mode = MODE_PROGRAM then
+        ARRAYWRITE DisplayString, ["CW  CCW SET ZRO", 0]
+    endif
     goto display_write_string
+
 
 ;=============================================================================
 operate_switch_on:

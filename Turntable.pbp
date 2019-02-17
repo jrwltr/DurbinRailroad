@@ -19,7 +19,7 @@ CURRENT_LOCATION_EEPROM_ADDRESS con 0
 TRANSLATE_TABLE_EEPROM_ADDRESS  con 4 
     ; the address in EEPROM where the turntable translate table is stored
 
-NUM_DAC_VALUES  con 15
+NUM_DAC_VALUES  con 13
 DACValues   var byte[NUM_DAC_VALUES]
 DACValIndex var byte
 
@@ -160,7 +160,7 @@ turntable_goto_position:
         StepCounts[0] = STEP_COUNTS
         StepCounts[1] = 0
         for DACValIndex = 0 to RampSteps-1
-            gosub set_dac
+            DAC1CON1 = DACValues[DACValIndex]
             gosub WaitOneStep
         next DACValIndex
 
@@ -175,7 +175,7 @@ turntable_goto_position:
         StepCounts[1] = 0
         do
             DACValIndex = DACValIndex - 1
-            gosub set_dac
+            DAC1CON1 = DACValues[DACValIndex]
             if DACValIndex = 0 then exit
             gosub WaitOneStep
         loop
@@ -192,12 +192,7 @@ turntable_stop:
     if TT_DIR1 = 0 and TT_DIR2 = 0 then return  ; if already stopped return
     TT_DIR1 = 0     ; stop the turntable
     TT_DIR2 = 0     ;
-#ifdef USE_EXTERNAL_DAC
-    DAC_value = 0
-    gosub DAC_write
-#else
-    DACCON1 = 0
-#endif
+    DAC1CON1 = 0
 
     pause 70        ; about 70 milliseconds before turntable stops moving at full speed
     T1CON.0 = 0     ; T1CON.TMR1ON = 0   disable timer 1
@@ -223,28 +218,17 @@ turntable_stop:
     goto turntable_save_current_location
 
 ;=============================================================================
-set_initial_dac:
-    DACValIndex = 0
-set_dac:
-#ifdef USE_EXTERNAL_DAC
-    DAC_value = DACValues[DACValIndex]
-    goto DAC_write
-#else
-    DACCON1 = DACValues[DACValIndex]
-    return
-#endif
-
-;=============================================================================
 turntable_increase_speed:
     if DACValIndex < NUM_DAC_VALUES-1 then
         DACValIndex = DACValIndex + 1
-        goto set_dac
+        DAC1CON1 = DACValues[DACValIndex]
     endif
     return
 
 ;=============================================================================
 turntable_clockwise:
-    gosub set_initial_dac
+    DACValIndex = 0
+    DAC1CON1 = DACValues[DACValIndex]
     gosub start_timer1
     TT_XOR  = 1
     TT_DIR1 = 1
@@ -253,7 +237,8 @@ turntable_clockwise:
 
 ;=============================================================================
 turntable_counterclockwise:
-    gosub set_initial_dac
+    DACValIndex = 0
+    DAC1CON1 = DACValues[DACValIndex]
     gosub start_timer1
     TT_XOR  = 0
     TT_DIR1 = 0
@@ -331,19 +316,14 @@ turntable_translate:
 
 ;=============================================================================
 turntable_initialize:
-#ifndef USE_EXTERNAL_DAC
-    APFCON.6 = 1
-#endif
     TT_DIR1 = 0
     TT_DIR2 = 0
-#ifndef USE_EXTERNAL_DAC
-    DACCON1 = 0
-    DACCON0 = 0
-    DACCON0.4 = 1   ; DACCON0.DACOE2 = 0    DAC is output to DACOUT2 pin
-    DACCON0.7 = 1   ; DACCON0.DACEN = 1     enable DAC 
-#endif
+    DAC1CON1 = 0
+    DAC1CON0 = 0
+    DAC1CON0.4 = 1   ; DAC1CON0.DACOE2 = 0    DAC is output to DACOUT2 pin
+    DAC1CON0.7 = 1   ; DAC1CON0.DACEN = 1     enable DAC 
 
-    ARRAYWRITE DACValues, [ 16, 32, 34, 41, 53, 69, 88, 110, 134, 159, 184, 208, 230, 249, 255]
+    ARRAYWRITE DACValues, [ 1, 3, 5, 7, 9, 11, 14, 17, 20, 23, 26, 29, 31]
         ; DACValues are based on a sin wave
 
     last_switch_request = $ffff
