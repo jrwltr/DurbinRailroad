@@ -18,9 +18,8 @@ operate_mode        var byte
     MODE_ROUTE_EDIT con 2
 
 ;=============================================================================
-switch_motor        var byte
 loconet_switch      var word
-loconet_sw_motor    var byte
+switch_motor    var byte
 
 display_update_needed  var bit
 
@@ -47,9 +46,8 @@ update_display:
         gosub display_write_string
 
         if route_number == ROUTE_NOT_FOUND then
-            switch_motor_to_throw = loconet_sw_motor
             if operate_mode = MODE_OPERATE then
-                if switch_motor_to_throw != $ff then
+                if switch_motor != $ff then
                     gosub switch_motor_read
                     if switch_motor_state = SWITCH_MOTOR_THROWN then
                         ARRAYWRITE DisplayString, ["=T", 0]
@@ -60,10 +58,9 @@ update_display:
                     ARRAYWRITE DisplayString, ["=?", 0]
                 endif
                 gosub display_write_string
-            endif
-            if operate_mode = MODE_PROGRAM then
-                if loconet_sw_motor != $ff then
-                    ARRAYWRITE DisplayString, [ ">", dec loconet_sw_motor+1, 0]
+            elseif operate_mode = MODE_PROGRAM then
+                if switch_motor != $ff then
+                    ARRAYWRITE DisplayString, [ ">", dec switch_motor+1, 0]
                 else
                     ; no translation found
                     ARRAYWRITE DisplayString, [">???", 0]
@@ -207,16 +204,19 @@ program_delete_key:
     if loconet_switch = $ffff then return
     if route_number != ROUTE_NOT_FOUND then
         route_number = loconet_switch
-        goto route_delete
+        gosub route_delete
     else
-        if (loconet_sw_motor = $ff) then return
-        goto switch_motor_map_delete
+        if (switch_motor = $ff) then return
+        gosub switch_motor_map_delete
+        switch_motor = $ff
     endif
+    return
 
 program_route_key
     if (loconet_switch = $ffff) then return
-    if (loconet_sw_motor = $ff) then
+    if (switch_motor = $ff) then
         gosub switch_motor_map_delete
+        switch_motor = $ff
     endif
     operate_mode = MODE_ROUTE_EDIT
     route_number = loconet_switch
