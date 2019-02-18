@@ -194,7 +194,7 @@ turntable_stop:
     TT_DIR2 = 0     ;
     DAC1CON1 = 0
 
-    pause 70        ; about 70 milliseconds before turntable stops moving at full speed
+    pause 600       ; about 600 milliseconds before turntable stops moving at full speed
     T1CON.0 = 0     ; T1CON.TMR1ON = 0   disable timer 1
 
     gosub read_timer_1
@@ -228,22 +228,24 @@ turntable_increase_speed:
 ;=============================================================================
 turntable_clockwise:
     DACValIndex = 0
-    DAC1CON1 = DACValues[DACValIndex]
     gosub start_timer1
     TT_XOR  = 1
     TT_DIR1 = 1
     TT_DIR2 = 0
+turntable_start_dac:
+    DACValIndex = 0
+    DAC1CON1 = DACValues[1] ; start with DacValues[1] to get things going a bit faster
+                            ; this will cause the first two DAC steps to be the same
+                            ; speed when ramping up
     return
 
 ;=============================================================================
 turntable_counterclockwise:
-    DACValIndex = 0
-    DAC1CON1 = DACValues[DACValIndex]
     gosub start_timer1
     TT_XOR  = 0
     TT_DIR1 = 0
     TT_DIR2 = 1
-    return
+    goto turntable_start_dac
 
 ;=============================================================================
 switch  var word
@@ -324,7 +326,6 @@ turntable_initialize:
     DAC1CON0.7 = 1   ; DAC1CON0.DACEN = 1     enable DAC 
 
     ARRAYWRITE DACValues, [ 1, 3, 5, 7, 9, 11, 14, 17, 20, 23, 26, 29, 31]
-        ; DACValues are based on a sin wave
 
     last_switch_request = $ffff
     tt_position[0] = $ffff
