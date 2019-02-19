@@ -1,5 +1,6 @@
 ;????don't go past zero
 ;????don't go past 360?
+;????fix LED so it doesn't stay on when turntable moving
 
 ;=============================================================================
 TT_XOR  var PortA.6
@@ -98,13 +99,6 @@ Clockwise       var bit
 
 turntable_goto_position:
     if (current_tt_loc[0] = $ffff) and (current_tt_loc[0] = $ffff) then return
-
-    DisplayRow = 1
-    DisplayCol = 0
-    gosub display_set_cursor
-    ARRAYWRITE DisplayString, ["Moving", 0]
-    gosub display_write_string
-    gosub display_clear_to_end_of_line
 
     long_minuend[0] = tt_position[0]
     long_minuend[1] = tt_position[1]
@@ -240,6 +234,13 @@ turntable_clockwise:
     TT_DIR1 = 1
     TT_DIR2 = 0
 turntable_start_dac:
+    DisplayRow = 1
+    DisplayCol = 0
+    gosub display_set_cursor
+    ARRAYWRITE DisplayString, ["Moving", 0]
+    gosub display_write_string
+    gosub display_clear_to_end_of_line
+
     DACValIndex = 0
     DAC1CON1 = DACValues[1] ; start with DacValues[1] to get things going a bit faster
                             ; this will cause the first two DAC steps to be the same
