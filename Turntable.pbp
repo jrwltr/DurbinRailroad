@@ -11,6 +11,8 @@ tt_position         var word[2]
 current_tt_loc      var word[2]
 last_switch_request var word
 
+save_operate_mode   var byte
+
 MAX_TT_STOPS            con 40
 
 ;=============================================================================
@@ -190,6 +192,8 @@ turntable_goto_position:
         gosub long_subtract
     loop until ((long_result[0] = 0) and (long_result[1] = 0)) or (long_result[1] & $8000)
 turntable_stop:
+    operate_mode = save_operate_mode
+    display_update_needed = 1
     if TT_DIR1 = 0 and TT_DIR2 = 0 then return  ; if already stopped return
     TT_DIR1 = 0     ; stop the turntable
     TT_DIR2 = 0     ;
@@ -227,6 +231,13 @@ turntable_increase_speed:
     return
 
 ;=============================================================================
+turntable_counterclockwise:
+    gosub start_timer1
+    TT_XOR  = 0
+    TT_DIR1 = 0
+    TT_DIR2 = 1
+    goto turntable_start_dac
+
 turntable_clockwise:
     DACValIndex = 0
     gosub start_timer1
@@ -234,26 +245,14 @@ turntable_clockwise:
     TT_DIR1 = 1
     TT_DIR2 = 0
 turntable_start_dac:
-    DisplayRow = 1
-    DisplayCol = 0
-    gosub display_set_cursor
-    ARRAYWRITE DisplayString, ["Moving", 0]
-    gosub display_write_string
-    gosub display_clear_to_end_of_line
-
+    save_operate_mode = operate_mode
+    operate_mode = MODE_MOVING
+    gosub update_display
     DACValIndex = 0
     DAC1CON1 = DACValues[1] ; start with DacValues[1] to get things going a bit faster
                             ; this will cause the first two DAC steps to be the same
                             ; speed when ramping up
     return
-
-;=============================================================================
-turntable_counterclockwise:
-    gosub start_timer1
-    TT_XOR  = 0
-    TT_DIR1 = 0
-    TT_DIR2 = 1
-    goto turntable_start_dac
 
 ;=============================================================================
 tt_stop     var word

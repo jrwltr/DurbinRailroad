@@ -16,6 +16,7 @@ INCLUDE "Interrupt.pbp"
 operate_mode        var byte
     MODE_OPERATE    con 0
     MODE_PROGRAM    con 1
+    MODE_MOVING     con 2
 
 loconet_switch      var word
 
@@ -78,6 +79,8 @@ update_display:
         ARRAYWRITE DisplayString, ["UP  DWN  GO", 0]
     elseif operate_mode = MODE_PROGRAM then
         ARRAYWRITE DisplayString, ["CW CCW SET ZERO", 0]
+    elseif operate_mode = MODE_MOVING then
+        ARRAYWRITE DisplayString, ["Moving", 0]
     endif
     gosub display_write_string
     goto display_clear_to_end_of_line
@@ -140,14 +143,14 @@ button_4_pressed:
 button_1_repeat:
     if operate_mode = MODE_OPERATE then
         goto operate_up_key
-    elseif operate_mode = MODE_PROGRAM then
+    else
         goto turntable_increase_speed
     endif
 
 button_2_repeat:
     if operate_mode = MODE_OPERATE then
         goto operate_down_key
-    elseif operate_mode = MODE_PROGRAM then
+    else
         goto turntable_increase_speed
     endif
 
@@ -158,7 +161,7 @@ button_4_repeat:
 ;=============================================================================
 button_1_released:
 button_2_released:
-    if operate_mode = MODE_PROGRAM then
+    if operate_mode = MODE_MOVING then
         goto turntable_stop
     endif
 button_3_released:
