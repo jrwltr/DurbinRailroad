@@ -99,6 +99,13 @@ Clockwise       var bit
 turntable_goto_position:
     if (current_tt_loc[0] = $ffff) and (current_tt_loc[0] = $ffff) then return
 
+    DisplayRow = 1
+    DisplayCol = 0
+    gosub display_set_cursor
+    ARRAYWRITE DisplayString, ["Moving", 0]
+    gosub display_write_string
+    gosub display_clear_to_end_of_line
+
     long_minuend[0] = tt_position[0]
     long_minuend[1] = tt_position[1]
     long_subtrahend[0] = current_tt_loc[0]
@@ -248,67 +255,109 @@ turntable_counterclockwise:
     goto turntable_start_dac
 
 ;=============================================================================
-switch  var word
+tt_stop     var word
+cl_found    var bit
+kk          var byte
 
-turntable_first_location:
-    loconet_switch = $ffff
-    goto turntable_find_next
+look_up_current_location:
+    cl_found = 0
+    ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS
+    for kk = 0 to MAX_TT_STOPS - 1
+        gosub eeprom_read_word
+        if (ee_word = $ffff) then exit
+        ee_address = ee_address + 2
+        gosub eeprom_read_long
+        ee_address = ee_address + 4
+        if (ee_long[0] = current_tt_loc[0]) and (ee_long[1] = current_tt_loc[1]) then
+            cl_found = 1
+            loconet_switch = ee_word
+            tt_position[0] = ee_long[0]
+            tt_position[1] = ee_long[1]
+            exit
+        endif
+    next kk 
+    return
+
+;=============================================================================
 turntable_next_location:
-    if loconet_switch != $ffff then
-        if loconet_switch = MAX_TT_STOPS - 1 then return
-turntable_find_next:
-        for switch = loconet_switch + 1 to MAX_TT_STOPS - 1
-            ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS+(switch*4)
-            gosub eeprom_read_long
-            long_result[0] = ee_long[0]
-            long_result[1] = ee_long[1]
-            if (long_result[0] != $ffff) or (long_result[1] != $ffff) then
-                tt_position[0] = long_result[0]
-                tt_position[1] = long_result[1]
-                loconet_switch = switch
-                exit
-            endif
-        next switch
+    if (loconet_switch = $ffff) or (tt_stop = MAX_TT_STOPS - 1) then return
+    ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS + ((tt_stop + 1) * 6)
+    gosub eeprom_read_word
+    if ee_word != $ffff then
+        tt_stop = tt_stop + 1
+        loconet_switch = ee_word
+        last_switch_request = ee_word
+        ee_address = ee_address + 2
+        gosub eeprom_read_long
+        tt_position[0] = ee_long[0]
+        tt_position[1] = ee_long[1]
     endif
     return
 
 ;=============================================================================
 turntable_previous_location:
-    if loconet_switch != $ffff then
-        if loconet_switch = 0 then return
-        for switch = loconet_switch - 1 to 0 step -1
-            ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS + (switch * 4)
-            gosub eeprom_read_long
-            if (ee_long[0] != $ffff) or (ee_long[1] != $ffff) then
-                tt_position[0] = ee_long[0]
-                tt_position[1] = ee_long[1]
-                loconet_switch = switch
-                exit
-            endif
-        next switch
+    if (loconet_switch == $ffff) or (tt_stop = 0) then return
+    ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS + ((tt_stop-1) * 6)
+    gosub eeprom_read_word
+    if ee_word != $ffff then
+        tt_stop = tt_stop - 1
+        loconet_switch = ee_word
+        last_switch_request = ee_word
+        ee_address = ee_address + 2
+        gosub eeprom_read_long
+        tt_position[0] = ee_long[0]
+        tt_position[1] = ee_long[1]
     endif
     return
 
 ;=============================================================================
 handle_switch_request:
-    if (loconet_switch >= MAX_TT_STOPS) then 
-        loconet_switch = last_switch_request
+    ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS
+    for kk = 0 to MAX_TT_STOPS - 1
+        gosub eeprom_read_word
+        if (ee_word = $ffff) then exit
+        ee_address = ee_address + 2
+        if (ee_word = loconet_switch) then 
+            gosub eeprom_read_long
+            tt_position[0] = ee_long[0]
+            tt_position[1] = ee_long[1]
+            exit
+        endif
+        ee_address = ee_address + 4
+    next kk
+    if (ee_word = loconet_switch) then
+        ; loconet_switch found in translate table
+        last_switch_request = loconet_switch
+        tt_stop = kk
+        if operate_mode = MODE_PROGRAM then return
+    else
+        ; loconet_switch not found in translate table
+        if operate_mode = MODE_OPERATE then 
+            loconet_switch = last_switch_request
+        else
+            tt_position[0] = $ffff
+            tt_position[1] = $ffff
+        endif
         return
     endif
-    last_switch_request = loconet_switch 
-    ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS+(last_switch_request*4)
-    gosub eeprom_read_long
-    tt_position[0] = ee_long[0]
-    tt_position[1] = ee_long[1]
 
-    if (tt_position[0] = $ffff) and (tt_position[1] = $ffff) then return
-    if operate_mode != MODE_OPERATE then return
     goto turntable_goto_position
 
 ;=============================================================================
 turntable_translate:
     if (loconet_switch = $ffff) or ((current_tt_loc[0] = $ffff) and (current_tt_loc[1] = $ffff)) then return
-    ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS+(loconet_switch*4)
+    gosub look_up_current_location
+    if kk = MAX_TT_STOPS then 
+        ; EEPROM is full
+        return
+    endif
+    tt_stop = kk
+    if !cl_found then
+        ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS + (tt_stop * 6)
+        ee_word = loconet_switch
+        gosub eeprom_write_word
+    endif
+    ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS + (tt_stop * 6) + 2
     ee_long[0] = current_tt_loc[0]
     ee_long[1] = current_tt_loc[1]
     gosub eeprom_write_long
@@ -327,21 +376,36 @@ turntable_initialize:
 
     ARRAYWRITE DACValues, [ 1, 3, 5, 7, 9, 11, 14, 17, 20, 23, 26, 29, 31]
 
-    last_switch_request = $ffff
-    tt_position[0] = $ffff
-    tt_position[1] = $ffff
-
     ; initialize timer 1
     TRISC.0 = 1     ; RC0 is input
     T1GCON = 0      ; disable Timer1 gate control
     T1CON = $84     ; clock source is T1CKI, prescale = 1:1, don't synchronize
+
+    last_switch_request = $ffff
+    tt_position[0] = $ffff
+    tt_position[1] = $ffff
 
     ee_address = CURRENT_LOCATION_EEPROM_ADDRESS
     gosub eeprom_read_long
     current_tt_loc[0] = ee_long[0]
     current_tt_loc[1] = ee_long[1]
 
-    goto turntable_first_location
+    gosub look_up_current_location
+    tt_stop = kk
+    if !cl_found then
+        tt_stop = 0
+        ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS
+        gosub eeprom_read_word
+        if ee_word != $ffff then
+            loconet_switch = ee_word
+            ee_address = ee_address + 2
+            gosub eeprom_read_long
+            tt_position[0] = ee_long[0]
+            tt_position[1] = ee_long[1]
+        endif
+    endif
+    last_switch_request = loconet_switch
+    return
 
 ;=============================================================================
 
