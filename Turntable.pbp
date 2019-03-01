@@ -1,6 +1,6 @@
-;????don't go past zero
+;????don't go past zero, or don't use $ffff as undefined?
 ;????don't go past 360?
-;????fix LED so it doesn't stay on when turntable moving
+;????fix fine movements with clockwise/counterclockwise keys
 
 ;=============================================================================
 TT_XOR  var PortA.6
@@ -23,8 +23,18 @@ TRANSLATE_TABLE_EEPROM_ADDRESS  con 4
     ; the address in EEPROM where the turntable translate table is stored
 
 NUM_DAC_VALUES  con 13
-DACValues   var byte[NUM_DAC_VALUES]
-DACValIndex var byte
+DACValues           var byte[NUM_DAC_VALUES]
+CountsPerSecond     var word[NUM_DAC_VALUES]
+CumulativeCounts    var word[NUM_DAC_VALUES]
+DACValIndex         var byte
+MaxSpeedIndex       var byte
+HoldTimer3Value     var word
+
+RampState           var byte
+    RAMP_UP_ONLY    con 0
+    RAMP_UP         con 1
+    RAMP_HOLD       con 2
+    RAMP_DOWN       con 3
 
 ;=============================================================================
 turntable_set_zero:
@@ -40,7 +50,7 @@ turntable_save_current_location:
 ;=============================================================================
 Timer1 var word[2]
 T var word
-read_timer_1:
+read_timer1:
     Timer1[1] = 0
     do
         T.byte0 = TMR1L
@@ -50,7 +60,7 @@ read_timer_1:
             Timer1[1] = 1
         endif
         ; if timer ticked while reading, read again
-    loop until T.byte0 == TMR1L
+    loop until T.byte0 = TMR1L
     Timer1[0] = T
     return
 
@@ -65,34 +75,9 @@ start_timer1:
     return
 
 ;=============================================================================
-StepCounts  var word[2]
-
-WaitOneStep:
-    do
-        gosub read_timer_1
-        long_minuend[0] = Timer1[0]
-        long_minuend[1] = Timer1[1]
-        gosub long_subtract
-
-        ; temporarily use long_addend1 to save the subtrahend
-        long_addend1[0] = long_subtrahend[0]
-        long_addend1[1] = long_subtrahend[1]
-
-        long_minuend[0] = long_result[0]
-        long_minuend[1] = long_result[1]
-        long_subtrahend[0] = StepCounts[0]
-        long_subtrahend[1] = StepCounts[1]
-        gosub long_subtract
-
-        ; restore original subtrahend
-        long_subtrahend[0] = long_addend1[0]
-        long_subtrahend[1] = long_addend1[1]
-
-    loop until (long_result[1] & $8000) = 0
-
-    long_subtrahend[0] = Timer1[0]
-    long_subtrahend[1] = Timer1[1]
-
+turntable_stop_timer:
+    T5CON.0 = 0 ; T5CON.ON = 0
+    T3CON.0 = 0 ; T3CON.ON = 0
     return
 
 ;=============================================================================
@@ -128,26 +113,32 @@ turntable_goto_position:
     CounterStop[0] = long_result[0]
     CounterStop[1] = long_result[1]
 
-    STEP_COUNTS     con 200 ; number of turntable counts at each DAC step
+    for MaxSpeedIndex = NUM_DAC_VALUES-1 to 1 step -1
+        long_minuend[0] = CumulativeCounts[MaxSpeedIndex]
+        long_minuend[1] = 0
+        long_subtrahend[0] = CounterStop[0]
+        long_subtrahend[1] = CounterStop[1]
+        gosub long_subtract
+        ; if CumulativeCounts[MaxSpeedIndex] <= CounterStop then exit
+        if long_result[1] & $8000 then exit
+    next MaxSpeedIndex
 
-    RampSteps   var word
-
+    ; HoldTimer3Value = -int((16 * (CounterStop-CumulativeCounts[MaxSpeedIndex]))/CountsPerSecond[MaxSpeedIndex])
     long_minuend[0] = CounterStop[0]
     long_minuend[1] = CounterStop[1]
-    long_subtrahend[0] = NUM_DAC_VALUES * STEP_COUNTS * 2
+    long_subtrahend[0] = CumulativeCounts[MaxSpeedIndex-1]
     long_subtrahend[1] = 0
     gosub long_subtract
-    if (long_result[1] & $8000) == 0 then
-        RampSteps = NUM_DAC_VALUES
-    else
-        RampSteps = CounterStop[0] / (STEP_COUNTS * 2)
-        long_subtrahend[0] = RampSteps * STEP_COUNTS * 2
-        long_subtrahend[1] = 0
-        gosub long_subtract
-    endif
-    MaxSpeedCounts  var word[2]
-    MaxSpeedCounts[0] = long_result[0]
-    MaxSpeedCounts[1] = long_result[1]
+    long_multiplicand[0] = long_result[0]
+    long_multiplicand[1] = long_result[1]
+    long_multiplier = 16
+    gosub long_multiply
+    long_dividend[0] = long_result[0]
+    long_dividend[1] = long_result[1]
+    long_divisor[0] = CountsPerSecond[MaxSpeedIndex]
+    long_divisor[1] = 0
+    gosub long_divide
+    HoldTimer3Value = -long_result[0]
 
     ; start the turntable
     if Clockwise then
@@ -156,42 +147,22 @@ turntable_goto_position:
         gosub turntable_counterclockwise
     endif
     
-    if RampSteps != 0 then
-        long_subtrahend[0] = 0
-        long_subtrahend[1] = 0
-        ; ramp up the turntable speed
-        StepCounts[0] = STEP_COUNTS
-        StepCounts[1] = 0
-        for DACValIndex = 0 to RampSteps-1
-            DAC1CON1 = DACValues[DACValIndex]
-            gosub WaitOneStep
-        next DACValIndex
+    RampState = RAMP_UP;
 
-        if (MaxSpeedCounts[0] != 0) or (MaxSpeedCounts[1] != 0) then
-            StepCounts[0] = MaxSpeedCounts[0]
-            StepCounts[1] = MaxSpeedCounts[1]
-            gosub WaitOneStep
-        endif
-
-        ; ramp down the turntable speed
-        StepCounts[0] = STEP_COUNTS
-        StepCounts[1] = 0
-        do
-            DACValIndex = DACValIndex - 1
-            DAC1CON1 = DACValues[DACValIndex]
-            if DACValIndex = 0 then exit
-            gosub WaitOneStep
-        loop
-    endif
+    if MaxSpeedIndex != 0 then return
+wait_until_done:
+    gosub turntable_stop_timer
     long_minuend[0] = CounterStop[0]
     long_minuend[1] = CounterStop[1]
     do
-        gosub read_timer_1
+        gosub read_timer1
         long_subtrahend[0] = Timer1[0]
         long_subtrahend[1] = Timer1[1]
         gosub long_subtract
     loop until ((long_result[0] = 0) and (long_result[1] = 0)) or (long_result[1] & $8000)
 turntable_stop:
+    gosub turntable_stop_timer
+
     operate_mode = save_operate_mode
     display_update_needed = 1
     if TT_DIR1 = 0 and TT_DIR2 = 0 then return  ; if already stopped return
@@ -202,7 +173,7 @@ turntable_stop:
     pause 600       ; about 600 milliseconds before turntable stops moving at full speed
     T1CON.0 = 0     ; T1CON.TMR1ON = 0   disable timer 1
 
-    gosub read_timer_1
+    gosub read_timer1
     if TT_XOR = 1 then
         ; clockwise, current_tt_loc = current_tt_loc + Timer1
         long_addend1[0] = current_tt_loc[0]
@@ -223,11 +194,39 @@ turntable_stop:
     goto turntable_save_current_location
 
 ;=============================================================================
-turntable_increase_speed:
-    if DACValIndex < NUM_DAC_VALUES-1 then
+turntable_timer_expired:
+    ; reset timer 3
+    TMR3L = -8
+    TMR3H = $ff
+
+    if RampState = RAMP_UP_ONLY then
+        if DACValIndex < NUM_DAC_VALUES-1 then
+            DACValIndex = DACValIndex + 1
+            DAC1CON1 = DACValues[DACValIndex]
+        endif
+    elseif RampState = RAMP_UP then
         DACValIndex = DACValIndex + 1
-        DAC1CON1 = DACValues[DACValIndex]
+        if DACValIndex = MaxSpeedIndex then
+            if HoldTimer3Value then
+                RampState = RAMP_HOLD;
+                TMR3L = HoldTimer3Value.byte0
+                TMR3H = HoldTimer3Value.byte1
+            else
+                RampState = RAMP_DOWN;
+            endif
+        endif
+    elseif RampState = RAMP_HOLD then
+        RampState = RAMP_DOWN;
+        DACValIndex = DACValIndex - 1
+    elseif RampState = RAMP_DOWN then
+        if DACValIndex = 1 then
+            DAC1CON1 = DACValues[0]
+            gosub wait_until_done
+            return
+        endif
+        DACValIndex = DACValIndex - 1
     endif
+    DAC1CON1 = DACValues[DACValIndex]
     return
 
 ;=============================================================================
@@ -252,6 +251,16 @@ turntable_start_dac:
     DAC1CON1 = DACValues[1] ; start with DacValues[1] to get things going a bit faster
                             ; this will cause the first two DAC steps to be the same
                             ; speed when ramping up
+
+    ; start turntable timer
+    TMR5L = 0       ; TMR5H:TMR5L = 0
+    TMR5H = 0
+    TMR3L = -8
+    TMR3H = $ff
+    T5CON.0 = 1 ; T5CON.ON = 1
+    T3CON.0 = 1 ; T3CON.ON = 1
+
+    RampState = RAMP_UP_ONLY
     return
 
 ;=============================================================================
@@ -296,7 +305,7 @@ turntable_next_location:
 
 ;=============================================================================
 turntable_previous_location:
-    if (loconet_switch == $ffff) or (tt_stop = 0) then return
+    if (loconet_switch = $ffff) or (tt_stop = 0) then return
     ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS + ((tt_stop-1) * 6)
     gosub eeprom_read_word
     if ee_word != $ffff then
@@ -311,21 +320,24 @@ turntable_previous_location:
     return
 
 ;=============================================================================
-handle_switch_request:
+look_up_loconet_switch:
     ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS
     for kk = 0 to MAX_TT_STOPS - 1
         gosub eeprom_read_word
         if (ee_word = $ffff) then exit
         ee_address = ee_address + 2
-        if (ee_word = loconet_switch) then 
-            gosub eeprom_read_long
-            tt_position[0] = ee_long[0]
-            tt_position[1] = ee_long[1]
-            exit
-        endif
+        if (ee_word = loconet_switch) then exit
         ee_address = ee_address + 4
     next kk
+    return
+
+;=============================================================================
+handle_switch_request:
+    gosub look_up_loconet_switch
     if (ee_word = loconet_switch) then
+        gosub eeprom_read_long
+        tt_position[0] = ee_long[0]
+        tt_position[1] = ee_long[1]
         ; loconet_switch found in translate table
         last_switch_request = loconet_switch
         tt_stop = kk
@@ -344,15 +356,15 @@ handle_switch_request:
     goto turntable_goto_position
 
 ;=============================================================================
-turntable_translate:
+turntable_set_translation:
     if (loconet_switch = $ffff) or ((current_tt_loc[0] = $ffff) and (current_tt_loc[1] = $ffff)) then return
-    gosub look_up_current_location
+    gosub look_up_loconet_switch
     if kk = MAX_TT_STOPS then 
         ; EEPROM is full
         return
     endif
     tt_stop = kk
-    if !cl_found then
+    if loconet_switch != ee_word then
         ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS + (tt_stop * 6)
         ee_word = loconet_switch
         gosub eeprom_write_word
@@ -374,12 +386,47 @@ turntable_initialize:
     DAC1CON0.4 = 1   ; DAC1CON0.DACOE2 = 0    DAC is output to DACOUT2 pin
     DAC1CON0.7 = 1   ; DAC1CON0.DACEN = 1     enable DAC 
 
-    ARRAYWRITE DACValues, [ 1, 3, 5, 7, 9, 11, 14, 17, 20, 23, 26, 29, 31]
+    ARRAYWRITE DACValues,       [  1,   3,   5,   7,   9,  11,  14,  17,   20,   23,   26,   29,   31 ]
+    CountsPerSecond[0] = 105
+    CountsPerSecond[1] = 174
+    CountsPerSecond[2] = 292
+    CountsPerSecond[3] = 400
+    CountsPerSecond[4] = 536
+    CountsPerSecond[5] = 660
+    CountsPerSecond[6] = 841
+    CountsPerSecond[7] = 1034
+    CountsPerSecond[8] = 1243
+    CountsPerSecond[9] = 1452
+    CountsPerSecond[10] = 1601
+    CountsPerSecond[11] = 1856
+    CountsPerSecond[12] = 2000
 
-    ; initialize timer 1
+    CumulativeCounts[0] = CountsPerSecond[0];
+    for kk = 1 to NUM_DAC_VALUES-1
+        CumulativeCounts[kk] = CumulativeCounts[kk-1] + CountsPerSecond[kk];
+    next kk
+
+
+    ; initialize timer 1, timer 1 is used as a counter to count the edges from the turntable sensor
     TRISC.0 = 1     ; RC0 is input
     T1GCON = 0      ; disable Timer1 gate control
     T1CON = $84     ; clock source is T1CKI, prescale = 1:1, don't synchronize
+
+    ; use timers 3 and 5 to generate an interrupt about every 1/2 second
+    ; Timer 5 rolls over about every 65 milliseconds
+    ; Timer 3 counts when timer 5 rolls over.  Timer 3 is set to -8 and interrupts when it rolls
+    ; over to 0.  8 * 65 results in interrupts about every 520 milliseconds
+
+    ; initialize timer 5
+    T5GCON = 0      ; disable Timer5 gate control
+    T5CLK = 1       ; Timer5 clock is Fosc/4
+    T5CON = $30     ; prescale = 1:8
+    ; timer 5 now counts at Fosc/4/8 = 32/4/8 = 1Mhz, rolls over about every 65 milliseconds
+
+    ; initialize timer 3
+    T3GCON = 0      ; disable Timer3 gate control
+    T3CLK = $0b     ; Timer3 clock is timer 5 rollover
+    T3CON = $00     ; prescale = 1:1
 
     last_switch_request = $ffff
     tt_position[0] = $ffff

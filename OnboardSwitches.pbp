@@ -15,6 +15,7 @@ OperateProgramSwitch    var PORTC.1
 pressed_button      var byte
 button_counter      var word
 button_end_count    var word
+do_repeat           var bit
 
 BUTTON_FIRST_COUNT          con 2   ; about   16 milliseconds (  2 counts @ 8 milliseconds per count)
 BUTTON_FIRST_REPEAT_COUNT   con 125 ; about 1000 milliseconds (125 counts @ 8 milliseconds per count)
@@ -52,6 +53,7 @@ onboard_switch_check:
                     pressed_button = Mask
                     button_counter = 0
                     button_end_count = BUTTON_FIRST_COUNT
+                    do_repeat = 1
                 else
                     ; button released
                     if     pressed_button = 1 then
@@ -65,6 +67,7 @@ onboard_switch_check:
                     endif
                     pressed_button = 0
                     display_update_needed = 1
+                    do_repeat = 0
                 endif
             endif
             Mask = Mask * 2
@@ -100,14 +103,16 @@ onboard_switch_check:
                 button_end_count = BUTTON_FIRST_REPEAT_COUNT
             else
                 ; button held until repeat counter expires
-                if     pressed_button = 1 then
-                    gosub button_1_repeat
-                elseif pressed_button = 2 then
-                    gosub button_2_repeat
-                elseif pressed_button = 4 then
-                    gosub button_3_repeat
-                elseif pressed_button = 8 then
-                    gosub button_4_repeat
+                if do_repeat then
+                    if     pressed_button = 1 then
+                        gosub button_1_repeat
+                    elseif pressed_button = 2 then
+                        gosub button_2_repeat
+                    elseif pressed_button = 4 then
+                        gosub button_3_repeat
+                    elseif pressed_button = 8 then
+                        gosub button_4_repeat
+                    endif
                 endif
                 button_end_count = BUTTON_NEXT_REPEAT_COUNT
             endif
@@ -119,7 +124,7 @@ onboard_switch_check:
 
 ;=============================================================================
 button_cancel_repeat:
-    pressed_button = 0
+    do_repeat = 0
     return
 
 ;=============================================================================

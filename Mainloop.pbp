@@ -28,6 +28,15 @@ mainloop:
         gosub onboard_switch_check
         gosub led_check
     endif
+#ifdef DO_TURNTABLE
+    INTCON.7 = 0 ; INTCON.GIE = 0
+    timer = timer3_interrupt
+    timer3_interrupt = 0
+    INTCON.7 = 1 ; INTCON.GIE = 1
+    if timer then
+        gosub turntable_timer_expired
+    endif
+#endif
 
     Goto mainloop
 

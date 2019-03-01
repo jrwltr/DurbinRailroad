@@ -5,6 +5,7 @@ rx_head         var byte bank0 SYSTEM
 rx_tail         var byte bank0 SYSTEM
 
 timer0_interrupt var byte bank0 SYSTEM
+timer3_interrupt var byte bank0 SYSTEM
 
 ;=============================================================================
 define INTHAND  isr
@@ -79,6 +80,18 @@ isr6:                                       ; endwhile
     movlw   1                               ;    timer0_interrupt = 1
     movwf   timer0_interrupt                ;
 isr7:                                       ; endif
+    movlb   14                              ; set bank to 14
+    btfss   PIR4,4                          ;
+    bra     isr8                            ; if PIR4.TMR5IF = 1
+    bcf     PIR4,4                          ;    PIR4.TMR5IF = 0
+isr8:                                       ; endif
+    btfss   PIR4,2                          ;
+    bra     isr9                            ; if PIR4.TMR3IF = 1
+    bcf     PIR4,2                          ;    PIR4.TMR3IF = 0
+    clrf    BSR                             ;    set bank to 0
+    movlw   1                               ;    timer3_interrupt = 1
+    movwf   timer3_interrupt                ;
+isr9:                                       ; endif
     clrf    BSR                             ; set bank to 0
     movf    fsr0l_save,  W                  ; fsr0l = fsr0L_save
     movwf   FSR0L                           ;
@@ -107,10 +120,16 @@ interrupt_initialize:
     PIE0.5 = 1      ; PIE0.TMR0IE = 1  enable timer 0 interrupt
     T0CON0 = $80    ; T0CON0.T0EN = 1  enable timer 0
 
-    INTCON.6 = 1    ; PEIE = 1       enable peripheral interrupt
+#ifdef DO_TURNTABLE
+    ; initialize timer 3 interrupts
+    PIR4.2 = 0      ; PIR4.TMR3IF = 0  clear timer 3 interrupt flag
+    PIE4.2 = 1      ; PIE4.TMR3IE = 1  enable timer 3 interrupt
+#endif
+
+    INTCON.6 = 1    ; INTCON.PEIE = 1       enable peripheral interrupt
 
     ; global interrupt enable = 1
-    INTCON.7 = 1
+    INTCON.7 = 1    ; INTCON.GIE = 1
     return
 
 ;=============================================================================

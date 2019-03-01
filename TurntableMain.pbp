@@ -124,7 +124,7 @@ button_3_pressed:
     if operate_mode = MODE_OPERATE then
         goto turntable_goto_position
     elseif operate_mode = MODE_PROGRAM then
-        goto turntable_translate
+        goto turntable_set_translation
     else
         return
     endif
@@ -143,16 +143,14 @@ button_4_pressed:
 button_1_repeat:
     if operate_mode = MODE_OPERATE then
         goto operate_up_key
-    else
-        goto turntable_increase_speed
     endif
+    goto button_cancel_repeat
 
 button_2_repeat:
     if operate_mode = MODE_OPERATE then
         goto operate_down_key
-    else
-        goto turntable_increase_speed
     endif
+    goto button_cancel_repeat
 
 button_3_repeat:
 button_4_repeat:
