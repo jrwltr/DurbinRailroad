@@ -4,6 +4,7 @@ asm
 endasm
 
 ;=============================================================================
+#if __PROCESSOR__ = "16F18856"
 #CONFIG
     __config _CONFIG1, _FEXTOSC_OFF & _RSTOSC_HFINTPLL & _CLKOUTEN_OFF & _CSWEN_OFF & _FCMEN_OFF
     __config _CONFIG2, _MCLRE_ON & _PWRTE_OFF & _LPBOREN_OFF & _BOREN_OFF & _BORV_LO & _ZCD_OFF & _PPS1WAY_OFF & _STVREN_ON & _DEBUG_OFF
@@ -11,6 +12,18 @@ endasm
     __config _CONFIG4, _WRT_OFF & _SCANE_available & _LVP_OFF
     __config _CONFIG5, _CP_OFF & _CPD_OFF
 #ENDCONFIG
+#endif
+
+#if __PROCESSOR__ = "16F19156"
+#CONFIG
+    __config _CONFIG1, _FEXTOSC_OFF & _RSTOSC_HFINTPLL & _CLKOUTEN_OFF & _VBATEN_OFF & _LCDPEN_OFF & _CSWEN_ON & _FCMEN_ON
+    __config _CONFIG2, _MCLRE_ON & _PWRTE_PWRT_64 & _LPBOREN_OFF & _BOREN_SBOREN & _BORV_LO & _ZCD_OFF & _PPS1WAY_OFF & _STVREN_ON
+    __config _CONFIG3, _WDTCPS_WDTCPS_31 & _WDTE_SWDTEN & _WDTCWS_WDTCWS_7 & _WDTCCS_LFINTOSC
+    __config _CONFIG4, _BBSIZE_512 & _BBEN_OFF & _SAFEN_OFF & _WRTAPP_OFF & _WRTB_OFF & _WRTC_OFF & _WRTD_OFF & _WRTSAF_OFF & _LVP_OFF
+    __config _CONFIG5, _CP_OFF
+#ENDCONFIG
+#endif
+
 
 ;=============================================================================
 ; DEFINEs:
