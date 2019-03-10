@@ -1,0 +1,64 @@
+;=============================================================================
+current_tt_loc      var word[2]
+tt_stop             var word
+
+tt_ee_switch        var word
+tt_ee_position      var word[2]
+
+MAX_TT_STOPS        con 40
+
+;=============================================================================
+CURRENT_LOCATION_EEPROM_ADDRESS con 0
+    ; the address in EEPROM where the current turntable position is stored
+TRANSLATE_TABLE_EEPROM_ADDRESS  con 4 
+    ; the address in EEPROM where the turntable translate table is stored
+    ; each translate table entry is 6 bytes
+    ;    the first two bytes contain the Loconet switch number
+    ;    the next four bytes contain the turntable position
+
+;=============================================================================
+turntable_ee_save_current_location:
+    ee_long[0] = current_tt_loc[0]
+    ee_long[1] = current_tt_loc[1]
+    ee_address = CURRENT_LOCATION_EEPROM_ADDRESS
+    goto eeprom_write_long
+
+;=============================================================================
+turntable_ee_read_current_location:
+    ee_address = CURRENT_LOCATION_EEPROM_ADDRESS
+    gosub eeprom_read_long
+    current_tt_loc[0] = ee_long[0]
+    current_tt_loc[1] = ee_long[1]
+    return
+
+;=============================================================================
+turntable_ee_read_stop:
+    ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS + (tt_stop * 6)
+    gosub eeprom_read_word
+    tt_ee_switch = ee_word
+    ee_address = ee_address + 2
+    gosub eeprom_read_long
+    tt_ee_position[0] = ee_long[0]
+    tt_ee_position[1] = ee_long[1]
+    return
+
+;=============================================================================
+turntable_ee_write_stop:
+    ee_word = tt_ee_switch
+    ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS + (tt_stop * 6)
+    gosub eeprom_write_word
+    ee_long[0] = tt_ee_position[0]
+    ee_long[1] = tt_ee_position[1]
+    ee_address = ee_address + 2
+    goto eeprom_write_long
+
+;=============================================================================
+turntable_ee_look_up_loconet_switch:
+    for tt_stop = 0 to MAX_TT_STOPS - 1
+        gosub turntable_ee_read_stop
+        if (tt_ee_switch = $ffff) or (tt_ee_switch = loconet_switch) then exit
+    next tt_stop
+    return
+
+;=============================================================================
+

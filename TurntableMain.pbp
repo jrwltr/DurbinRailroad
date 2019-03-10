@@ -29,6 +29,7 @@ INCLUDE "EEPROM.pbp"
 INCLUDE "OnboardSwitches.pbp"
 INCLUDE "LOCONET.pbp"
 INCLUDE "LongMath.pbp"
+INCLUDE "TurnTableEEPROM.pbp"
 INCLUDE "TurnTable.pbp"
 
 ;=============================================================================
