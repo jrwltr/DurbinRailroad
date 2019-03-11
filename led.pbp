@@ -24,10 +24,10 @@ led_blinking    var byte[LED_COUNT] ; keep track of the LEDs that are being blin
 ;=============================================================================
 led_initialize:
     ; all LEDs off
-     LED[0] = 1
-     LED[1] = 1
-     LED[2] = 1
-     LED[3] = 1
+    LED[0] = 1
+    LED[1] = 1
+    LED[2] = 1
+    LED[3] = 1
     return
 
 ;=============================================================================

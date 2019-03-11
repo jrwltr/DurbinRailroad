@@ -3,9 +3,9 @@
 ;????fix fine movements with clockwise/counterclockwise keys
 
 ;=============================================================================
-TT_XOR  var PortA.6
-TT_DIR1 var PortC.2
-TT_DIR2 var PortB.0
+TT_XOR  var PORTA.6
+TT_DIR1 var PORTC.2
+TT_DIR2 var PORTB.0
 
 tt_position         var word[2]
 last_switch_request var word

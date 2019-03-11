@@ -242,8 +242,8 @@ route_no_key_repeat:
 
 ;=============================================================================
 init:
-gosub led_initialize
 gosub display_initialize
+gosub led_initialize
 gosub loconet_initialize 
 gosub switch_motor_initialize
 gosub interrupt_initialize 
