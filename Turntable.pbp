@@ -335,7 +335,7 @@ turntable_initialize:
     CountsPerSecond[ 9] = 1452
     CountsPerSecond[10] = 1601
     CountsPerSecond[11] = 1856
-    CountsPerSecond[12] = 2000
+    CountsPerSecond[12] = 2030
 
     CumulativeCounts[0] = CountsPerSecond[0];
     for kk = 1 to NUM_DAC_VALUES-1
