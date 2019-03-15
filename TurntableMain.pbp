@@ -34,10 +34,13 @@ INCLUDE "TurnTable.pbp"
 
 ;=============================================================================
 display_long:
-    if (long_result[0] = $ffff) and (long_result[1] = $ffff) then
+    if (long_minuend[0] = $ffff) and (long_minuend[1] = $ffff) then
         ; no translation found
         ARRAYWRITE DisplayString, ["??? ", 0]
     else
+        long_subtrahend[0] = TT_ZERO_OFFSET_LO
+        long_subtrahend[1] = TT_ZERO_OFFSET_HI
+        gosub long_subtract
         ARRAYWRITE DisplayString, [hex long_result[1], hex4 long_result[0], " ", 0]
     endif
     goto display_write_string
@@ -54,12 +57,12 @@ update_display:
     endif
     gosub display_write_string
 
-    long_result[0] = tt_position[0]
-    long_result[1] = tt_position[1]
+    long_minuend[0] = desired_tt_position[0]
+    long_minuend[1] = desired_tt_position[1]
     gosub display_long
 
-    long_result[0] = current_tt_loc[0]
-    long_result[1] = current_tt_loc[1]
+    long_minuend[0] = current_tt_loc[0]
+    long_minuend[1] = current_tt_loc[1]
     gosub display_long
 
     gosub display_clear_to_end_of_line
