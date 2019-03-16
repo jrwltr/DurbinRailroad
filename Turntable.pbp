@@ -12,11 +12,9 @@ save_operate_mode   var byte
 
 ;=============================================================================
 
-NUM_DAC_VALUES  con 13
-DACValues           var byte[NUM_DAC_VALUES]
-CountsPerSecond     var word[NUM_DAC_VALUES]
-CumulativeCounts    var word[NUM_DAC_VALUES]
-DACValIndex         var byte
+MAX_DAC_VALUE   con 31
+CountsPerSecond     var word[MAX_DAC_VALUE-1]
+CumulativeCounts    var word[MAX_DAC_VALUE-1]
 MaxSpeedIndex       var byte
 HoldTimer3Value     var word
 kk                  var byte
@@ -26,6 +24,16 @@ RampState           var byte
     RAMP_UP         con 1
     RAMP_HOLD       con 2
     RAMP_DOWN       con 3
+#ifdef CALIBRATE
+    RAMP_UP_CALIBRATE   con 4
+    RAMP_HOLD_CALIBRATE con 5
+    RAMP_DOWN_CALIBRATE con 6
+
+TTCalDAC    var byte[MAX_DAC_VALUE]
+TTCalCount  var word[MAX_DAC_VALUE]
+TTCalIndex  var byte
+
+#endif
 
 ;=============================================================================
 TT_ZERO_OFFSET_HI  con $0
@@ -44,7 +52,7 @@ read_timer1:
         T.byte0 = TMR1L
         T.byte1 = TMR1H
         if PIR1.0 then
-            ;timer overlowed
+            ;timer overflowed
             Timer1[1] = 1
         endif
         ; if timer ticked while reading, read again
@@ -101,7 +109,7 @@ turntable_goto_position:
     CounterStop[0] = long_result[0]
     CounterStop[1] = long_result[1]
 
-    for MaxSpeedIndex = NUM_DAC_VALUES-1 to 1 step -1
+    for MaxSpeedIndex = MAX_DAC_VALUE-2 to 1 step -1
         long_minuend[0] = CumulativeCounts[MaxSpeedIndex]
         long_minuend[1] = 0
         long_subtrahend[0] = CounterStop[0]
@@ -182,19 +190,30 @@ turntable_stop:
     goto turntable_ee_save_current_location
 
 ;=============================================================================
+#ifdef CALIBRATE
+save_calibration_counts:
+    if TTCalIndex < MAX_DAC_VALUE then
+        gosub read_timer1
+        TTCalDAC[TTCalIndex] = DAC1CON1
+        TTCalCount[TTCalIndex] = Timer1[0]
+        TTCalIndex = TTCalIndex + 1
+    endif
+    return
+#endif
+
+;=============================================================================
 turntable_timer_expired:
     ; reset timer 3
     TMR3L = -8
     TMR3H = $ff
 
     if RampState = RAMP_UP_ONLY then
-        if DACValIndex < NUM_DAC_VALUES-1 then
-            DACValIndex = DACValIndex + 1
-            DAC1CON1 = DACValues[DACValIndex]
+        if DAC1CON1 < MAX_DAC_VALUE then
+            DAC1CON1 = DAC1CON1 + 1
         endif
     elseif RampState = RAMP_UP then
-        DACValIndex = DACValIndex + 1
-        if DACValIndex = MaxSpeedIndex then
+        if DAC1CON1 < MaxSpeedIndex then DAC1CON1 = DAC1CON1 + 1
+        if DAC1CON1 = MaxSpeedIndex then
             if HoldTimer3Value then
                 RampState = RAMP_HOLD;
                 TMR3L = HoldTimer3Value.byte0
@@ -203,18 +222,32 @@ turntable_timer_expired:
                 RampState = RAMP_DOWN;
             endif
         endif
-    elseif RampState = RAMP_HOLD then
+    elseif (RampState = RAMP_HOLD) or (RampState = RAMP_DOWN) then
         RampState = RAMP_DOWN;
-        DACValIndex = DACValIndex - 1
-    elseif RampState = RAMP_DOWN then
-        if DACValIndex = 1 then
-            DAC1CON1 = DACValues[0]
+        if DAC1CON1 != 1 then DAC1CON1 = DAC1CON1 - 1
+        if DAC1CON1 = 1 then
             gosub wait_until_done
-            return
         endif
-        DACValIndex = DACValIndex - 1
+#ifdef CALIBRATE
+    elseif RampState = RAMP_UP_CALIBRATE then
+        gosub save_calibration_counts
+        if DAC1CON1 < MAX_DAC_VALUE then
+            DAC1CON1 = DAC1CON1 + 1
+            if DAC1CON1 = MAX_DAC_VALUE then
+                RampState = RAMP_HOLD_CALIBRATE
+            endif
+        endif
+    elseif RampState = RAMP_HOLD_CALIBRATE then
+        gosub save_calibration_counts
+        RampState = RAMP_DOWN_CALIBRATE
+    elseif RampState = RAMP_DOWN_CALIBRATE then
+        gosub save_calibration_counts
+        DAC1CON1 = DAC1CON1 - 1
+        if DAC1CON1 = 0 then
+            gosub turntable_stop
+        endif
+#endif
     endif
-    DAC1CON1 = DACValues[DACValIndex]
     return
 
 ;=============================================================================
@@ -226,7 +259,6 @@ turntable_counterclockwise:
     goto turntable_start_dac
 
 turntable_clockwise:
-    DACValIndex = 0
     gosub start_timer1
     TT_XOR  = 1
     TT_DIR1 = 1
@@ -235,10 +267,8 @@ turntable_start_dac:
     save_operate_mode = operate_mode
     operate_mode = MODE_MOVING
     gosub update_display
-    DACValIndex = 0
-    DAC1CON1 = DACValues[1] ; start with DacValues[1] to get things going a bit faster
-                            ; this will cause the first two DAC steps to be the same
-                            ; speed when ramping up
+
+    DAC1CON1 = 1
 
     ; start turntable timer
     TMR5L = 0       ; TMR5H:TMR5L = 0
@@ -248,7 +278,12 @@ turntable_start_dac:
     T5CON.0 = 1 ; T5CON.ON = 1
     T3CON.0 = 1 ; T3CON.ON = 1
 
+#ifdef CALIBRATE
+    RampState = RAMP_UP_CALIBRATE
+    TTCalIndex  = 0
+#else
     RampState = RAMP_UP_ONLY
+#endif
     return
 
 ;=============================================================================
@@ -268,6 +303,17 @@ turntable_next_location:
 
 ;=============================================================================
 turntable_previous_location:
+#ifdef CALIBRATE
+    if TTCalIndex > 0 then
+        TTCalIndex = TTCalIndex - 1
+        DisplayRow = 3
+        DisplayCol = 0
+        gosub display_set_cursor
+        ARRAYWRITE DisplayString, [dec TTCalIndex, " ", dec TTCalDAC[TTCalIndex], " ", dec TTCalCount[TTCalIndex], 0]
+        gosub display_write_string
+        gosub display_clear_to_end_of_line
+    endif
+#endif
     if (loconet_switch = $ffff) or (tt_stop = 0) then return
     tt_stop = tt_stop - 1
     gosub turntable_ee_read_stop
@@ -322,23 +368,40 @@ turntable_initialize:
     DAC1CON0.4 = 1   ; DAC1CON0.DACOE2 = 0    DAC is output to DACOUT2 pin
     DAC1CON0.7 = 1   ; DAC1CON0.DACEN = 1     enable DAC 
 
-    ARRAYWRITE DACValues,       [  1,   3,   5,   7,   9,  11,  14,  17,   20,   23,   26,   29,   31 ]
-    CountsPerSecond[ 0] =  105
-    CountsPerSecond[ 1] =  174
-    CountsPerSecond[ 2] =  292
-    CountsPerSecond[ 3] =  400
-    CountsPerSecond[ 4] =  536
-    CountsPerSecond[ 5] =  660
-    CountsPerSecond[ 6] =  841
-    CountsPerSecond[ 7] = 1034
-    CountsPerSecond[ 8] = 1243
-    CountsPerSecond[ 9] = 1452
-    CountsPerSecond[10] = 1601
-    CountsPerSecond[11] = 1856
-    CountsPerSecond[12] = 2030
+    CountsPerSecond[ 0] = 20
+    CountsPerSecond[ 1] = 68
+    CountsPerSecond[ 2] = 128
+    CountsPerSecond[ 3] = 186
+    CountsPerSecond[ 4] = 250
+    CountsPerSecond[ 5] = 312
+    CountsPerSecond[ 6] = 376
+    CountsPerSecond[ 7] = 436
+    CountsPerSecond[ 8] = 498
+    CountsPerSecond[ 9] = 564
+    CountsPerSecond[10] = 622
+    CountsPerSecond[11] = 682
+    CountsPerSecond[12] = 746
+    CountsPerSecond[13] = 808
+    CountsPerSecond[14] = 874
+    CountsPerSecond[15] = 944
+    CountsPerSecond[16] = 1004
+    CountsPerSecond[17] = 1068
+    CountsPerSecond[18] = 1138
+    CountsPerSecond[19] = 1208
+    CountsPerSecond[20] = 1270
+    CountsPerSecond[21] = 1338
+    CountsPerSecond[22] = 1408
+    CountsPerSecond[23] = 1480
+    CountsPerSecond[24] = 1544
+    CountsPerSecond[25] = 1622
+    CountsPerSecond[26] = 1692
+    CountsPerSecond[27] = 1764
+    CountsPerSecond[28] = 1846
+    CountsPerSecond[29] = 1916
+    CountsPerSecond[30] = 2000
 
     CumulativeCounts[0] = CountsPerSecond[0];
-    for kk = 1 to NUM_DAC_VALUES-1
+    for kk = 1 to MAX_DAC_VALUE-2
         CumulativeCounts[kk] = CumulativeCounts[kk-1] + CountsPerSecond[kk];
     next kk
 

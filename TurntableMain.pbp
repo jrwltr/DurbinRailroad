@@ -163,9 +163,11 @@ button_4_repeat:
 ;=============================================================================
 button_1_released:
 button_2_released:
+#ifndef CALIBRATE
     if operate_mode = MODE_MOVING then
         goto turntable_stop
     endif
+#endif
 button_3_released:
 button_4_released:
     return
