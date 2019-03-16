@@ -24,16 +24,6 @@ RampState           var byte
     RAMP_UP         con 1
     RAMP_HOLD       con 2
     RAMP_DOWN       con 3
-#ifdef CALIBRATE
-    RAMP_UP_CALIBRATE   con 4
-    RAMP_HOLD_CALIBRATE con 5
-    RAMP_DOWN_CALIBRATE con 6
-
-TTCalDAC    var byte[MAX_DAC_VALUE]
-TTCalCount  var word[MAX_DAC_VALUE]
-TTCalIndex  var byte
-
-#endif
 
 ;=============================================================================
 TT_ZERO_OFFSET_HI  con $0
@@ -190,18 +180,6 @@ turntable_stop:
     goto turntable_ee_save_current_location
 
 ;=============================================================================
-#ifdef CALIBRATE
-save_calibration_counts:
-    if TTCalIndex < MAX_DAC_VALUE then
-        gosub read_timer1
-        TTCalDAC[TTCalIndex] = DAC1CON1
-        TTCalCount[TTCalIndex] = Timer1[0]
-        TTCalIndex = TTCalIndex + 1
-    endif
-    return
-#endif
-
-;=============================================================================
 turntable_timer_expired:
     ; reset timer 3
     TMR3L = -8
@@ -228,25 +206,6 @@ turntable_timer_expired:
         if DAC1CON1 = 1 then
             gosub wait_until_done
         endif
-#ifdef CALIBRATE
-    elseif RampState = RAMP_UP_CALIBRATE then
-        gosub save_calibration_counts
-        if DAC1CON1 < MAX_DAC_VALUE then
-            DAC1CON1 = DAC1CON1 + 1
-            if DAC1CON1 = MAX_DAC_VALUE then
-                RampState = RAMP_HOLD_CALIBRATE
-            endif
-        endif
-    elseif RampState = RAMP_HOLD_CALIBRATE then
-        gosub save_calibration_counts
-        RampState = RAMP_DOWN_CALIBRATE
-    elseif RampState = RAMP_DOWN_CALIBRATE then
-        gosub save_calibration_counts
-        DAC1CON1 = DAC1CON1 - 1
-        if DAC1CON1 = 0 then
-            gosub turntable_stop
-        endif
-#endif
     endif
     return
 
@@ -278,12 +237,7 @@ turntable_start_dac:
     T5CON.0 = 1 ; T5CON.ON = 1
     T3CON.0 = 1 ; T3CON.ON = 1
 
-#ifdef CALIBRATE
-    RampState = RAMP_UP_CALIBRATE
-    TTCalIndex  = 0
-#else
     RampState = RAMP_UP_ONLY
-#endif
     return
 
 ;=============================================================================
@@ -303,17 +257,6 @@ turntable_next_location:
 
 ;=============================================================================
 turntable_previous_location:
-#ifdef CALIBRATE
-    if TTCalIndex > 0 then
-        TTCalIndex = TTCalIndex - 1
-        DisplayRow = 3
-        DisplayCol = 0
-        gosub display_set_cursor
-        ARRAYWRITE DisplayString, [dec TTCalIndex, " ", dec TTCalDAC[TTCalIndex], " ", dec TTCalCount[TTCalIndex], 0]
-        gosub display_write_string
-        gosub display_clear_to_end_of_line
-    endif
-#endif
     if (loconet_switch = $ffff) or (tt_stop = 0) then return
     tt_stop = tt_stop - 1
     gosub turntable_ee_read_stop
