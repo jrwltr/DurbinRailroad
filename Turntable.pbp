@@ -311,43 +311,43 @@ turntable_initialize:
     DAC1CON0.4 = 1   ; DAC1CON0.DACOE2 = 0    DAC is output to DACOUT2 pin
     DAC1CON0.7 = 1   ; DAC1CON0.DACEN = 1     enable DAC 
 
-    CountsPerSecond[ 0] = 20
-    CountsPerSecond[ 1] = 68
-    CountsPerSecond[ 2] = 128
-    CountsPerSecond[ 3] = 186
-    CountsPerSecond[ 4] = 250
-    CountsPerSecond[ 5] = 312
-    CountsPerSecond[ 6] = 376
-    CountsPerSecond[ 7] = 436
-    CountsPerSecond[ 8] = 498
-    CountsPerSecond[ 9] = 564
-    CountsPerSecond[10] = 622
-    CountsPerSecond[11] = 682
-    CountsPerSecond[12] = 746
-    CountsPerSecond[13] = 808
-    CountsPerSecond[14] = 874
-    CountsPerSecond[15] = 944
-    CountsPerSecond[16] = 1004
-    CountsPerSecond[17] = 1068
-    CountsPerSecond[18] = 1138
-    CountsPerSecond[19] = 1208
-    CountsPerSecond[20] = 1270
-    CountsPerSecond[21] = 1338
-    CountsPerSecond[22] = 1408
-    CountsPerSecond[23] = 1480
-    CountsPerSecond[24] = 1544
-    CountsPerSecond[25] = 1622
-    CountsPerSecond[26] = 1692
-    CountsPerSecond[27] = 1764
-    CountsPerSecond[28] = 1846
-    CountsPerSecond[29] = 1916
-    CountsPerSecond[30] = 2000
+    ;                      95%  105%  100%
+    CountsPerSecond[ 0] =   19 ;  21 ;  20
+    CountsPerSecond[ 1] =   65 ;  71 ;  68
+    CountsPerSecond[ 2] =  122 ; 134 ; 128
+    CountsPerSecond[ 3] =  177 ; 195 ; 186
+    CountsPerSecond[ 4] =  238 ; 263 ; 250
+    CountsPerSecond[ 5] =  296 ; 328 ; 312
+    CountsPerSecond[ 6] =  357 ; 395 ; 376
+    CountsPerSecond[ 7] =  414 ; 458 ; 436
+    CountsPerSecond[ 8] =  473 ; 523 ; 498
+    CountsPerSecond[ 9] =  536 ; 592 ; 564
+    CountsPerSecond[10] =  591 ; 653 ; 622
+    CountsPerSecond[11] =  648 ; 716 ; 682
+    CountsPerSecond[12] =  709 ; 783 ; 746
+    CountsPerSecond[13] =  768 ; 848 ; 808
+    CountsPerSecond[14] =  830 ; 918 ; 874
+    CountsPerSecond[15] =  897 ; 991 ; 944
+    CountsPerSecond[16] =  954 ;1054 ;1004
+    CountsPerSecond[17] = 1015 ;1121 ;1068
+    CountsPerSecond[18] = 1081 ;1195 ;1138
+    CountsPerSecond[19] = 1148 ;1268 ;1208
+    CountsPerSecond[20] = 1207 ;1334 ;1270
+    CountsPerSecond[21] = 1271 ;1405 ;1338
+    CountsPerSecond[22] = 1338 ;1478 ;1408
+    CountsPerSecond[23] = 1406 ;1554 ;1480
+    CountsPerSecond[24] = 1467 ;1621 ;1544
+    CountsPerSecond[25] = 1541 ;1703 ;1622
+    CountsPerSecond[26] = 1607 ;1777 ;1692
+    CountsPerSecond[27] = 1676 ;1852 ;1764
+    CountsPerSecond[28] = 1754 ;1938 ;1846
+    CountsPerSecond[29] = 1820 ;2012 ;1916
+    CountsPerSecond[30] = 1900 ;2100 ;2000
 
     CumulativeCounts[0] = CountsPerSecond[0];
     for kk = 1 to MAX_DAC_VALUE-2
         CumulativeCounts[kk] = CumulativeCounts[kk-1] + CountsPerSecond[kk];
     next kk
-
 
     ; initialize timer 1, timer 1 is used as a counter to count the edges from the turntable sensor
     TRISC.0 = 1     ; RC0 is input
