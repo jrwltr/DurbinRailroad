@@ -177,6 +177,7 @@ turntable_timer_expired:
     gosub long_subtract
     long_minuend[0] = long_result[0]
     long_minuend[1] = long_result[1]
+    ;long_minuend contains the number of counts left until stop
 
     ExpectedCountsAtNextSpeed   var word
     if (DAC1CON1 < MAX_DAC_VALUE) then
@@ -193,7 +194,9 @@ turntable_timer_expired:
     ;take to stop if we speed up to the next DAC value or hold at max speed
     ;if ((CounterStop - Timer1) < (RampDownCounts[DAC1CON1-1] + ExpectedCountsAtNextSpeed)) then
     if (long_result[1] & $8000) then
-        DAC1CON1 = DAC1CON1 - 1
+        do
+            DAC1CON1 = DAC1CON1 - 1
+        loop until (DAC1CON1 = 1) or ((long_minuend[1] = 0) and (long_minuend[0] > RampDownCounts[DAC1CON1-1]))
     else
         if (DAC1CON1 < MAX_DAC_VALUE) then
             DAC1CON1 = DAC1CON1 + 1
