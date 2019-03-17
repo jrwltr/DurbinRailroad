@@ -37,7 +37,7 @@ read_timer1:
     do
         T.byte0 = TMR1L
         T.byte1 = TMR1H
-        if PIR1.0 then
+        if PIR4.0 then
             ;timer overflowed
             Timer1[1] = 1
         endif
@@ -91,7 +91,7 @@ turntable_goto_position:
 
     ; start timer1 in counter mode
     T1CON.0 = 0     ; T1CON.TMR1ON = 0   disable timer 1
-    PIR1.0 = 0      ; PIR1.TMR1IF = 0  turn off timer1 interrupt flag
+    PIR4.0 = 0      ; PIR4.TMR1IF = 0  turn off timer1 interrupt flag
     TMR1H = 0       ; TMR1H:TMR1L = 0
     TMR1L = 0       ;
     T1CON.0 = 1     ; T1CON.TMR1ON = 1   enable timer 1
