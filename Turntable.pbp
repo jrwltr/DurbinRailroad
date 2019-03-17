@@ -1,33 +1,29 @@
-;????fix fine movements with clockwise/counterclockwise keys
+;????fix fine movements with clockwise/counterclockwise keys, don't debounce key release?
 
 ;=============================================================================
 TT_XOR  var PORTA.6
 TT_DIR1 var PORTC.2
 TT_DIR2 var PORTB.0
 
-desired_tt_position var word[2]
-last_switch_request var word
+desired_tt_position     var word[2]
+position_to_goto        var word[2]
+last_switch_request     var word
 
-save_operate_mode   var byte
+save_operate_mode       var byte
+save_desired_position   var word[2]
 
 ;=============================================================================
 
 MAX_DAC_VALUE   con 31
-CountsPerSecond     var word[MAX_DAC_VALUE-1]
-CumulativeCounts    var word[MAX_DAC_VALUE-1]
-MaxSpeedIndex       var byte
-HoldTimer3Value     var word
-kk                  var byte
+RampDownCounts  var word[MAX_DAC_VALUE]
 
-RampState           var byte
-    RAMP_UP_ONLY    con 0
-    RAMP_UP         con 1
-    RAMP_HOLD       con 2
-    RAMP_DOWN       con 3
-
-;=============================================================================
 TT_ZERO_OFFSET_HI  con $0
 TT_ZERO_OFFSET_LO  con $800
+
+TT_MAX_POSITION_LO  con $86A0
+TT_MAX_POSITION_HI  con $1
+
+;=============================================================================
 turntable_set_zero:
     current_tt_loc[0] = TT_ZERO_OFFSET_LO
     current_tt_loc[1] = TT_ZERO_OFFSET_HI
@@ -51,16 +47,6 @@ read_timer1:
     return
 
 ;=============================================================================
-start_timer1:
-    ; start timer1 in counter mode
-    T1CON.0 = 0     ; T1CON.TMR1ON = 0   disable timer 1
-    PIR1.0 = 0      ; PIR1.TMR1IF = 0  turn off timer1 interrupt flag
-    TMR1H = 0       ; TMR1H:TMR1L = 0
-    TMR1L = 0       ;
-    T1CON.0 = 1     ; T1CON.TMR1ON = 1   enable timer 1
-    return
-
-;=============================================================================
 turntable_stop_timer:
     T5CON.0 = 0 ; T5CON.ON = 0
     T3CON.0 = 0 ; T3CON.ON = 0
@@ -73,69 +59,67 @@ Clockwise       var bit
 turntable_goto_position:
     if (current_tt_loc[0] = $ffff) and (current_tt_loc[0] = $ffff) then return
 
-    long_minuend[0] = desired_tt_position[0]
-    long_minuend[1] = desired_tt_position[1]
+    long_minuend[0] = position_to_goto[0]
+    long_minuend[1] = position_to_goto[1]
     long_subtrahend[0] = current_tt_loc[0]
     long_subtrahend[1] = current_tt_loc[1]
     gosub long_subtract
 
     if (long_result[0] = 0) and (long_result[1] = 0) then 
-        ;desired_tt_position = current_tt_loc
+        ;position_to_goto = current_tt_loc
         return
     elseif long_result[1] & $8000 then
-        ;desired_tt_position < current_tt_loc
+        ;position_to_goto < current_tt_loc
 
         long_minuend[0] = current_tt_loc[0]
         long_minuend[1] = current_tt_loc[1]
-        long_subtrahend[0] = desired_tt_position[0]
-        long_subtrahend[1] = desired_tt_position[1]
+        long_subtrahend[0] = position_to_goto[0]
+        long_subtrahend[1] = position_to_goto[1]
         gosub long_subtract
 
         Clockwise = 0
     else
-        ;desired_tt_position > current_tt_loc
+        ;position_to_goto > current_tt_loc
         Clockwise = 1
     endif
     CounterStop[0] = long_result[0]
     CounterStop[1] = long_result[1]
 
-    for MaxSpeedIndex = MAX_DAC_VALUE-2 to 1 step -1
-        long_minuend[0] = CumulativeCounts[MaxSpeedIndex]
-        long_minuend[1] = 0
-        long_subtrahend[0] = CounterStop[0]
-        long_subtrahend[1] = CounterStop[1]
-        gosub long_subtract
-        ; if CumulativeCounts[MaxSpeedIndex] <= CounterStop then exit
-        if long_result[1] & $8000 then exit
-    next MaxSpeedIndex
+    save_operate_mode = operate_mode
+    operate_mode = MODE_MOVING
+    gosub update_display
 
-    ; HoldTimer3Value = -int((16 * (CounterStop-CumulativeCounts[MaxSpeedIndex]))/CountsPerSecond[MaxSpeedIndex])
-    long_minuend[0] = CounterStop[0]
-    long_minuend[1] = CounterStop[1]
-    long_subtrahend[0] = CumulativeCounts[MaxSpeedIndex-1]
-    long_subtrahend[1] = 0
-    gosub long_subtract
-    long_multiplicand[0] = long_result[0]
-    long_multiplicand[1] = long_result[1]
-    long_multiplier = 16
-    gosub long_multiply
-    long_dividend[0] = long_result[0]
-    long_dividend[1] = long_result[1]
-    long_divisor[0] = CountsPerSecond[MaxSpeedIndex]
-    long_divisor[1] = 0
-    gosub long_divide
-    HoldTimer3Value = -long_result[0]
+    ; start timer1 in counter mode
+    T1CON.0 = 0     ; T1CON.TMR1ON = 0   disable timer 1
+    PIR1.0 = 0      ; PIR1.TMR1IF = 0  turn off timer1 interrupt flag
+    TMR1H = 0       ; TMR1H:TMR1L = 0
+    TMR1L = 0       ;
+    T1CON.0 = 1     ; T1CON.TMR1ON = 1   enable timer 1
+
+    ; set the direction
+    if Clockwise then
+        TT_XOR  = 1
+        TT_DIR1 = 1
+        TT_DIR2 = 0
+    else
+        TT_XOR  = 0
+        TT_DIR1 = 0
+        TT_DIR2 = 1
+    endif
+
+    ; start turntable timer
+    TMR5L = 0       ; TMR5H:TMR5L = 0
+    TMR5H = 0
+    TMR3L = -8
+    TMR3H = $ff
+    T5CON.0 = 1 ; T5CON.ON = 1
+    T3CON.0 = 1 ; T3CON.ON = 1
 
     ; start the turntable
-    if Clockwise then
-        gosub turntable_clockwise
-    else
-        gosub turntable_counterclockwise
-    endif
-    
-    RampState = RAMP_UP;
+    DAC1CON1 = 1
 
-    if MaxSpeedIndex != 0 then return
+    if (CounterStop[1] != 0) || (CounterStop[0] > RampDownCounts[0] + RampDownCounts[1]) then return
+
 wait_until_done:
     gosub turntable_stop_timer
     long_minuend[0] = CounterStop[0]
@@ -185,60 +169,59 @@ turntable_timer_expired:
     TMR3L = -8
     TMR3H = $ff
 
-    if RampState = RAMP_UP_ONLY then
-        if DAC1CON1 < MAX_DAC_VALUE then
+    gosub read_timer1
+    long_minuend[0] = CounterStop[0]
+    long_minuend[1] = CounterStop[1]
+    long_subtrahend[0] = Timer1[0]
+    long_subtrahend[1] = Timer1[1]
+    gosub long_subtract
+    long_minuend[0] = long_result[0]
+    long_minuend[1] = long_result[1]
+
+    ExpectedCountsAtNextSpeed   var word
+    if (DAC1CON1 < MAX_DAC_VALUE) then
+        ExpectedCountsAtNextSpeed = RampDownCounts[DAC1CON1  ] - RampDownCounts[DAC1CON1-1]
+    else
+        ExpectedCountsAtNextSpeed = RampDownCounts[MAX_DAC_VALUE-1] - RampDownCounts[MAX_DAC_VALUE-2]
+    endif
+    long_subtrahend[0] = RampDownCounts[DAC1CON1-1] + ExpectedCountsAtNextSpeed
+    long_subtrahend[1] = 0
+    gosub long_subtract
+
+    ;(CounterStop - Timer1) is the number of counts left before stopping
+    ;(RampDownCounts[DAC1CON1-1] + ExpectedCountsAtNextSpeed)) is the number of counts it will
+    ;take to stop if we speed up to the next DAC value or hold at max speed
+    ;if ((CounterStop - Timer1) < (RampDownCounts[DAC1CON1-1] + ExpectedCountsAtNextSpeed)) then
+    if (long_result[1] & $8000) then
+        DAC1CON1 = DAC1CON1 - 1
+    else
+        if (DAC1CON1 < MAX_DAC_VALUE) then
             DAC1CON1 = DAC1CON1 + 1
         endif
-    elseif RampState = RAMP_UP then
-        if DAC1CON1 < MaxSpeedIndex then DAC1CON1 = DAC1CON1 + 1
-        if DAC1CON1 = MaxSpeedIndex then
-            if HoldTimer3Value then
-                RampState = RAMP_HOLD;
-                TMR3L = HoldTimer3Value.byte0
-                TMR3H = HoldTimer3Value.byte1
-            else
-                RampState = RAMP_DOWN;
-            endif
-        endif
-    elseif (RampState = RAMP_HOLD) or (RampState = RAMP_DOWN) then
-        RampState = RAMP_DOWN;
-        if DAC1CON1 != 1 then DAC1CON1 = DAC1CON1 - 1
-        if DAC1CON1 = 1 then
-            gosub wait_until_done
-        endif
+    endif
+    if DAC1CON1 = 1 then
+        gosub wait_until_done
     endif
     return
 
 ;=============================================================================
 turntable_counterclockwise:
-    gosub start_timer1
-    TT_XOR  = 0
-    TT_DIR1 = 0
-    TT_DIR2 = 1
-    goto turntable_start_dac
+    ; goto zero or until key is released
+    position_to_goto[0] = TT_ZERO_OFFSET_LO
+    position_to_goto[1] = TT_ZERO_OFFSET_HI
+    goto turntable_goto_position
 
+;=============================================================================
 turntable_clockwise:
-    gosub start_timer1
-    TT_XOR  = 1
-    TT_DIR1 = 1
-    TT_DIR2 = 0
-turntable_start_dac:
-    save_operate_mode = operate_mode
-    operate_mode = MODE_MOVING
-    gosub update_display
-
-    DAC1CON1 = 1
-
-    ; start turntable timer
-    TMR5L = 0       ; TMR5H:TMR5L = 0
-    TMR5H = 0
-    TMR3L = -8
-    TMR3H = $ff
-    T5CON.0 = 1 ; T5CON.ON = 1
-    T3CON.0 = 1 ; T3CON.ON = 1
-
-    RampState = RAMP_UP_ONLY
-    return
+    ; goto max or until key is released
+    long_addend1[0] = TT_ZERO_OFFSET_LO
+    long_addend1[1] = TT_ZERO_OFFSET_HI
+    long_addend2[0] = TT_MAX_POSITION_LO
+    long_addend2[1] = TT_MAX_POSITION_HI
+    gosub long_add
+    position_to_goto[0] = long_result[0]
+    position_to_goto[1] = long_result[1]
+    goto turntable_goto_position
 
 ;=============================================================================
 turntable_next_location:
@@ -285,6 +268,8 @@ handle_switch_request:
         endif
         return
     endif
+    position_to_goto[0] = desired_tt_position[0]
+    position_to_goto[1] = desired_tt_position[1]
     goto turntable_goto_position
 
 ;=============================================================================
@@ -311,43 +296,37 @@ turntable_initialize:
     DAC1CON0.4 = 1   ; DAC1CON0.DACOE2 = 0    DAC is output to DACOUT2 pin
     DAC1CON0.7 = 1   ; DAC1CON0.DACEN = 1     enable DAC 
 
-    ;                      95%  105%  100%
-    CountsPerSecond[ 0] =   19 ;  21 ;  20
-    CountsPerSecond[ 1] =   65 ;  71 ;  68
-    CountsPerSecond[ 2] =  122 ; 134 ; 128
-    CountsPerSecond[ 3] =  177 ; 195 ; 186
-    CountsPerSecond[ 4] =  238 ; 263 ; 250
-    CountsPerSecond[ 5] =  296 ; 328 ; 312
-    CountsPerSecond[ 6] =  357 ; 395 ; 376
-    CountsPerSecond[ 7] =  414 ; 458 ; 436
-    CountsPerSecond[ 8] =  473 ; 523 ; 498
-    CountsPerSecond[ 9] =  536 ; 592 ; 564
-    CountsPerSecond[10] =  591 ; 653 ; 622
-    CountsPerSecond[11] =  648 ; 716 ; 682
-    CountsPerSecond[12] =  709 ; 783 ; 746
-    CountsPerSecond[13] =  768 ; 848 ; 808
-    CountsPerSecond[14] =  830 ; 918 ; 874
-    CountsPerSecond[15] =  897 ; 991 ; 944
-    CountsPerSecond[16] =  954 ;1054 ;1004
-    CountsPerSecond[17] = 1015 ;1121 ;1068
-    CountsPerSecond[18] = 1081 ;1195 ;1138
-    CountsPerSecond[19] = 1148 ;1268 ;1208
-    CountsPerSecond[20] = 1207 ;1334 ;1270
-    CountsPerSecond[21] = 1271 ;1405 ;1338
-    CountsPerSecond[22] = 1338 ;1478 ;1408
-    CountsPerSecond[23] = 1406 ;1554 ;1480
-    CountsPerSecond[24] = 1467 ;1621 ;1544
-    CountsPerSecond[25] = 1541 ;1703 ;1622
-    CountsPerSecond[26] = 1607 ;1777 ;1692
-    CountsPerSecond[27] = 1676 ;1852 ;1764
-    CountsPerSecond[28] = 1754 ;1938 ;1846
-    CountsPerSecond[29] = 1820 ;2012 ;1916
-    CountsPerSecond[30] = 1900 ;2100 ;2000
-
-    CumulativeCounts[0] = CountsPerSecond[0];
-    for kk = 1 to MAX_DAC_VALUE-2
-        CumulativeCounts[kk] = CumulativeCounts[kk-1] + CountsPerSecond[kk];
-    next kk
+    RampDownCounts[ 0] = 10 
+    RampDownCounts[ 1] = 44 
+    RampDownCounts[ 2] = 108 
+    RampDownCounts[ 3] = 201 
+    RampDownCounts[ 4] = 326 
+    RampDownCounts[ 5] = 482 
+    RampDownCounts[ 6] = 670 
+    RampDownCounts[ 7] = 888 
+    RampDownCounts[ 8] = 1137 
+    RampDownCounts[ 9] = 1419 
+    RampDownCounts[10] = 1730 
+    RampDownCounts[11] = 2071 
+    RampDownCounts[12] = 2444 
+    RampDownCounts[13] = 2848 
+    RampDownCounts[14] = 3285 
+    RampDownCounts[15] = 3757 
+    RampDownCounts[16] = 4259 
+    RampDownCounts[17] = 4793 
+    RampDownCounts[18] = 5362 
+    RampDownCounts[19] = 5966 
+    RampDownCounts[20] = 6601 
+    RampDownCounts[21] = 7270 
+    RampDownCounts[22] = 7974 
+    RampDownCounts[23] = 8714 
+    RampDownCounts[24] = 9486 
+    RampDownCounts[25] = 10297 
+    RampDownCounts[26] = 11143 
+    RampDownCounts[27] = 12025 
+    RampDownCounts[28] = 12948 
+    RampDownCounts[29] = 13906 
+    RampDownCounts[30] = 14906 
 
     ; initialize timer 1, timer 1 is used as a counter to count the edges from the turntable sensor
     TRISC.0 = 1     ; RC0 is input

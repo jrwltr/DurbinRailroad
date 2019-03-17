@@ -126,6 +126,8 @@ operate_down_key:
 button_3_pressed:
     ; enter key
     if operate_mode = MODE_OPERATE then
+        position_to_goto[0] = desired_tt_position[0]
+        position_to_goto[1] = desired_tt_position[1]
         goto turntable_goto_position
     elseif operate_mode = MODE_PROGRAM then
         goto turntable_set_translation
