@@ -1,7 +1,10 @@
 
 HEXTARGETS = TurntableMain.hex SwitchMain.hex
 
-PIC = 16F18856
+TURNTABLE_PIC = 16F18856
+SWITCH_PIC = 16F19156
+
+ASMFLAGS = q
 
 all: $(HEXTARGETS)
 
@@ -19,11 +22,10 @@ TurntableMain.hex: TurntableMain.pbp \
 				   TurnTableEEPROM.pbp \
 				   TurnTable.pbp \
 				   $(COMMON_PREREQUISITES)
+	pbpx -ampasmx -o$(ASMFLAGS) -p$(TURNTABLE_PIC) $<
 
 SwitchMain.hex: SwitchMain.pbp \
 			   	SwitchMotor.pbp \
 				$(COMMON_PREREQUISITES)
-
-%.hex: %.pbp
-	pbpx -ampasmx -oq -p$(PIC) $<
+	pbpx -ampasmx -o$(ASMFLAGS) -p$(SWITCH_PIC) $<
 
