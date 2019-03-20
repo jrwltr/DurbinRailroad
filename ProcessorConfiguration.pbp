@@ -14,17 +14,6 @@ endasm
 #ENDCONFIG
 #endif
 
-#if __PROCESSOR__ = "16F19156"
-#CONFIG
-    __config _CONFIG1, _FEXTOSC_OFF & _RSTOSC_HFINTPLL & _CLKOUTEN_OFF & _VBATEN_OFF & _LCDPEN_OFF & _CSWEN_ON & _FCMEN_ON
-    __config _CONFIG2, _MCLRE_ON & _PWRTE_PWRT_64 & _LPBOREN_OFF & _BOREN_SBOREN & _BORV_LO & _ZCD_OFF & _PPS1WAY_OFF & _STVREN_ON
-    __config _CONFIG3, _WDTCPS_WDTCPS_31 & _WDTE_SWDTEN & _WDTCWS_WDTCWS_7 & _WDTCCS_LFINTOSC
-    __config _CONFIG4, _BBSIZE_512 & _BBEN_OFF & _SAFEN_OFF & _WRTAPP_OFF & _WRTB_OFF & _WRTC_OFF & _WRTD_OFF & _WRTSAF_OFF & _LVP_OFF
-    __config _CONFIG5, _CP_OFF
-#ENDCONFIG
-#endif
-
-
 ;=============================================================================
 ; DEFINEs:
 define OSC 32
@@ -43,19 +32,21 @@ TRISC  = %10100011    'Set PORTC bits 0, 1, 5, 7 as inputs, the rest as outputs
 WPUA   = %10001111    'Set weak pullups on PORTA bits 0, 1, 2, 3 and 7, the rest as outputs
 
 ;=============================================================================
+#ifdef DO_SWITCHMOTOR
 SCL1     var PORTC.3 'IC pin 14 (RC3) is a hard or soft I2C Clock
 SDA1     var PORTC.4 'IC pin 15 (RC4) is a hard or soft I2C Data
     SW_INTERFACE_I2C_CLK    var SCL1
     SW_INTERFACE_I2C_DATA   var SDA1
+#endif
 
 SCL2     var PORTA.4 'IC pin  6 (RA4) is a soft I2C Clock
 SDA2     var PORTA.5 'IC pin  7 (RA5) is a soft I2C Data
+#ifndef USE_PIC_INTERNAL_EEPROM
     EEPROM_I2C_CLK          var SCL2
     EEPROM_I2C_DATA         var SDA2
+#endif
     DISPLAY_I2C_CLK         var SCL2
     DISPLAY_I2C_DATA        var SDA2
-    DAC_I2C_CLK             var SCL2
-    DAC_I2C_DATA            var SDA2
 
 ;=============================================================================
 OperateProgramSwitch    var PORTC.1
@@ -79,24 +70,16 @@ LED_COUNT   con 4
 LED         var PORTB.1  ; treated as an array of bits LED[0]...LED[3]
 
 ;=============================================================================
+#ifdef DO_SWITCHMOTOR
 SWITCH_MOTOR_INTERRUPT_INTERFACE0  var PORTC.5
 ;SWITCH_MOTOR_INTERRUPT_INTERFACE1  var ????
 ;SWITCH_MOTOR_INTERRUPT_INTERFACE2  var ???? 
-
-;=============================================================================
-TURNTABLE_XOR  var PORTA.6
-TURNTABLE_DIR1 var PORTC.2
-TURNTABLE_DIR2 var PORTB.0
+#endif
 
 ;=============================================================================
 ; Initialize UART for receiving Loconet data
 ;
-#if __PROCESSOR__ = "16F18856"
 RXPPS = $17     ; pin select RX is RC7
-#endif
-#if __PROCESSOR__ = "16F19156"
-RX1PPS = $17    ; pin select RX is RC7
-#endif
 RC6PPS = $10    ; pin select TX is RC6 as output
 TX1STA = $20    ; TX9 = 0, TXEN = 1, SYNC = 0, BRGH = 0
 BAUD1CON = $10  ; SCKP = 1, BRG16 = 0   
@@ -111,7 +94,7 @@ while PIR3.5    ; read receive register until receive interrupt disappears
 ASM
     movlb   2         ; set bank to 2
     movf    RC1REG, W ; W = RC1REG
-#ENDASM
+ENDASM
 wend
 PIR3.4 = 0      ; PIR3.TXIF = 0  clear serial port transmit interrupt flag
 RC1STA.7 = 1    ; SPEN = 1       enable serial port
@@ -119,14 +102,15 @@ PIE3.5 = 1      ; RCIE = 1       enable receive interrupt
 RC1STA.4 = 1    ; CREN = 1       enable the serial port receiver
 
 ;=============================================================================
+#ifdef DO_SWITCHMOTOR
 PCF8574_I2C_ADDRESS     con $40 ; switch motor I/O expander
 PCF8574A_I2C_ADDRESS    con $70 ; switch motor I/O expander
+#endif
 DISPLAY_I2C_ADDRESS     con $4E
-DAC_I2C_ADDRESS         con $92
 EEPROM_I2C_ADDRESS      con $A0
 
 ;=============================================================================
-; initialize timer 0 interrupts
+; initialize timer 0 interrupts for interrupts about every 8 milliseconds
 TMR0H = $ff     ; timer 0 8 bit comparator value
 TMR0L = 0       ; timer 0 counter starts at zero
 T0CON1 = $68    ; T0CON1.TOCS<2:0> = HFINTOSC, T0CON1.T0ASYNC = 0, T0CON1.T0CKPS<3:0> = 8 (1:256 prescaler)
@@ -136,18 +120,22 @@ T0CON0 = $80    ; T0CON0.T0EN = 1  enable timer 0
 
 #ifdef DO_TURNTABLE
 ;=============================================================================
+TURNTABLE_XOR  var PORTA.6
+TURNTABLE_DIR1 var PORTC.2
+TURNTABLE_DIR2 var PORTB.0
+
+;=============================================================================
+; initialize the DAC to control turntable speed
+
 TURNTABLE_DAC   var DAC1CON1
 
 DAC1CON1 = 0
 DAC1CON0 = 0
 DAC1CON0.4 = 1   ; DAC1CON0.DACOE2 = 0    DAC is output to DACOUT2 pin
 DAC1CON0.7 = 1   ; DAC1CON0.DACEN = 1     enable DAC 
-; initialize timer 1, timer 1 is used as a counter to count the edges from the turntable sensor
-TRISC.0 = 1     ; RC0 is input
-T1GCON = 0      ; disable Timer1 gate control
-T1CON = $84     ; clock source is T1CKI, prescale = 1:1, don't synchronize
 
-; use timers 3 and 5 to generate an interrupt about every 1/2 second
+;=============================================================================
+; Use timers 3 and 5 to generate an interrupt about every 1/2 second
 ; Timer 5 rolls over about every 65 milliseconds
 ; Timer 3 counts when timer 5 rolls over.  Timer 3 is set to -8 and interrupts when it rolls
 ; over to 0.  8 * 65 results in interrupts about every 520 milliseconds
@@ -165,15 +153,12 @@ T3CON = $00     ; prescale = 1:1
 PIR4.2 = 0      ; PIR4.TMR3IF = 0  clear timer 3 interrupt flag
 PIE4.2 = 1      ; PIE4.TMR3IE = 1  enable timer 3 interrupt
 
-;=============================================================================
 ResetHalfSecondTimer:
     TMR3L = -8
     TMR3H = $ff
     return
 
-;=============================================================================
 StartHalfSecondTimer:
-    ; start turntable timer
     TMR5L = 0       ; TMR5H:TMR5L = 0
     TMR5H = 0
     gosub ResetHalfSecondTimer
@@ -181,17 +166,22 @@ StartHalfSecondTimer:
     T3CON.0 = 1 ; T3CON.ON = 1
     return
 
-;=============================================================================
 StopHalfSecondTimer:
     T5CON.0 = 0 ; T5CON.ON = 0
     T3CON.0 = 0 ; T3CON.ON = 0
     return
 
 ;=============================================================================
+; timer 1 is used in counter mode to count the edges from the turntable sensor
+
 TURNTABLE_COUNTER_ENABLE            var T1CON.0 ; T1CON.TMR1ON
 TURNTABLE_COUNTER_INTERRUPT_FLAG    var PIR4.0  ; PIR4.TMR1IF
 
-;=============================================================================
+; initialize timer 1
+TRISC.0 = 1     ; RC0 is input
+T1GCON = 0      ; disable Timer1 gate control
+T1CON = $84     ; clock source is T1CKI, prescale = 1:1, don't synchronize
+
 StartTurntableCounter:
     ; start timer1 in counter mode
     TURNTABLE_COUNTER_ENABLE = 0
@@ -201,7 +191,6 @@ StartTurntableCounter:
     TURNTABLE_COUNTER_ENABLE = 1
     return
 
-;=============================================================================
 TTCounter var word[2]
 T var word
 ReadTurntableCounter:
@@ -220,7 +209,9 @@ ReadTurntableCounter:
 
 ;=============================================================================
 
-PERIPHERAL_INTERRUPT_ENABLE = 1
-
 #endif
+
+;=============================================================================
+
+PERIPHERAL_INTERRUPT_ENABLE = 1
 
