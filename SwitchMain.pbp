@@ -246,7 +246,6 @@ gosub display_initialize
 gosub led_initialize
 gosub loconet_initialize 
 gosub switch_motor_initialize
-gosub interrupt_initialize 
 
 if OperateProgramSwitch then
     operate_mode = MODE_OPERATE

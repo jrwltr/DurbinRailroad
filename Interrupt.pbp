@@ -102,33 +102,4 @@ isr9:                                       ; endif
 ENDASM
 
 ;=============================================================================
-interrupt_initialize:
-    ; initialize serial receive interrupts
-    while PIR3.5    ; read receive register until receive interrupt disappears
-        rx_data_fifo[0] = RC1REG
-    wend
-    PIR3.4 = 0      ; PIR3.TXIF = 0  clear serial port transmit interrupt flag
-    RC1STA.7 = 1    ; SPEN = 1       enable serial port
-    PIE3.5 = 1      ; RCIE = 1       enable receive interrupt
-    RC1STA.4 = 1    ; CREN = 1       enable the serial port receiver
-
-    ; initialize timer 0 interrupts
-    TMR0H = $ff     ; timer 0 8 bit comparator value
-    TMR0L = 0       ; timer 0 counter starts at zero
-    T0CON1 = $68    ; T0CON1.TOCS<2:0> = HFINTOSC, T0CON1.T0ASYNC = 0, T0CON1.T0CKPS<3:0> = 8 (1:256 prescaler)
-    PIR0.5 = 0      ; PIR0.TMR0IF = 0  clear timer 0 interrupt flag
-    PIE0.5 = 1      ; PIE0.TMR0IE = 1  enable timer 0 interrupt
-    T0CON0 = $80    ; T0CON0.T0EN = 1  enable timer 0
-
-#ifdef DO_TURNTABLE
-    ; initialize timer 3 interrupts
-    PIR4.2 = 0      ; PIR4.TMR3IF = 0  clear timer 3 interrupt flag
-    PIE4.2 = 1      ; PIE4.TMR3IE = 1  enable timer 3 interrupt
-#endif
-
-    PERIPHERAL_INTERRUPT_ENABLE = 1
-    GLOBAL_INTERRUPT_ENABLE = 1
-    return
-
-;=============================================================================
 

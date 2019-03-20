@@ -1,6 +1,7 @@
 ;=============================================================================
 ; This is the mainloop of the program
 ;=============================================================================
+GLOBAL_INTERRUPT_ENABLE = 1
 display_update_needed = 1
 mainloop:
     if display_update_needed then 
