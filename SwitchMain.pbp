@@ -4,10 +4,11 @@
 #define DO_SWITCHMOTOR
 #define DO_LOCONET
 
+CLEAR       ; zero all variables
+
 INCLUDE "ProcessorConfiguration.pbp"
 
-CLEAR       ; zero all variables
-goto init   ; skip over interrupt service routine
+goto init   ; skip over interrupt service routine, functions, other included code
 
 INCLUDE "Interrupt.pbp"
 
@@ -141,7 +142,8 @@ operate_switch_off:
     return
 
 ;=============================================================================
-; button_1_pressed is called when the onboard PB1 button is pressed
+; button_X_pressed is called when an onboard button is pressed
+;
 button_1_pressed:
     if operate_mode = MODE_PROGRAM then
         goto program_delete_key
@@ -246,12 +248,6 @@ gosub display_initialize
 gosub led_initialize
 gosub loconet_initialize 
 gosub switch_motor_initialize
-
-if OperateProgramSwitch then
-    operate_mode = MODE_OPERATE
-else
-    operate_mode = MODE_PROGRAM
-endif
 
 ;=============================================================================
 

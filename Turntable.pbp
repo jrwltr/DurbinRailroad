@@ -1,10 +1,15 @@
 ;=============================================================================
-desired_tt_position     var word[2]
-position_to_goto        var word[2]
-last_switch_request     var word
+desired_tt_position     var word[2] ; the turntable position corresponding 
+                                    ; to a preprogrammed turntable stop
 
-save_operate_mode       var byte
-save_desired_position   var word[2]
+position_to_goto        var word[2] ; set before calling turntable_goto_position
+
+last_switch_request     var word    ; the last switch request received on the Loconet,
+                                    ; or the switch corresponding to a preprogrammed
+                                    ; turntable stop
+
+save_operate_mode       var byte    ; a place to save the current operate_mode, while
+                                    ; the turntable is moving
 
 ;=============================================================================
 
@@ -13,19 +18,33 @@ RampDownCounts  var word[MAX_DAC_VALUE]
 
 TT_ZERO_OFFSET_HI  con $0
 TT_ZERO_OFFSET_LO  con $800
+    ; TT_ZERO_OFFSET_HI:TT_ZERO_OFFSET_LO is a 32 bit value which is added to
+    ; every turntable position.  When you go to position 0, you're really going
+    ; to this offset.  This allows the use of -1 ($ffffffff) as a marker for
+    ; for an undefined position
 
 TT_MAX_POSITION_LO  con $86A0
 TT_MAX_POSITION_HI  con $1
+    ; TT_MAX_POSITION_HI:TT_MAX_POSITION_LO is a 32 bit value representing
+    ; the maximum turntable position.  It is shortly beyond a 360 degree
+    ; movement from the zero position.
 
 ;=============================================================================
+; turntable_set_zero: mark the current location of the turntable as position 0
+;
 turntable_set_zero:
     current_tt_loc[0] = TT_ZERO_OFFSET_LO
     current_tt_loc[1] = TT_ZERO_OFFSET_HI
     goto turntable_ee_save_current_location
 
 ;=============================================================================
-CounterStop     var word[2]  ; number of counts before stopping timer
-Clockwise       var bit
+;turntable_goto_position: move the turntable to the requested position
+;   input: position_to_goto
+;
+CounterStop     var word[2] ; number of counts before stopping timer
+
+Clockwise       var bit     ; 1 if requested movement is clockwise,
+                            ; 0 if requested movement is counter clockwise
 
 turntable_goto_position:
     if (current_tt_loc[0] = $ffff) and (current_tt_loc[0] = $ffff) then return
@@ -37,10 +56,11 @@ turntable_goto_position:
     gosub long_subtract
 
     if (long_result[0] = 0) and (long_result[1] = 0) then 
-        ;position_to_goto = current_tt_loc
+        ;position_to_goto = current_tt_loc, we're already there, no reason to move
         return
     elseif long_result[1] & $8000 then
-        ;position_to_goto < current_tt_loc
+        ;position_to_goto < current_tt_loc, new position is less than current position
+        ;so need to move counter clockwise
 
         long_minuend[0] = current_tt_loc[0]
         long_minuend[1] = current_tt_loc[1]
@@ -50,11 +70,13 @@ turntable_goto_position:
 
         Clockwise = 0
     else
-        ;position_to_goto > current_tt_loc
+        ;position_to_goto > current_tt_loc, new position is greater than current positioon
+        ;so need to move clockwise
         Clockwise = 1
     endif
     CounterStop[0] = long_result[0]
     CounterStop[1] = long_result[1]
+    ;CounterStop now contains the number of counts between the current position and the new position
 
     save_operate_mode = operate_mode
     operate_mode = MODE_MOVING
@@ -75,11 +97,19 @@ turntable_goto_position:
 
     gosub StartHalfSecondTimer
 
-    ; start the turntable
+    ; start the turntable at slowest speed
     TURNTABLE_DAC = 1
 
-    if (CounterStop[1] != 0) || (CounterStop[0] > RampDownCounts[0] + RampDownCounts[1]) then return
+    if (CounterStop[1] != 0) || (CounterStop[0] > RampDownCounts[0] + RampDownCounts[1]) then 
+        ; number of counts to move (CounterStop) is big enough that we will use the half second
+        ; timer to ramp up and down the turntable speed
+        return
+    endif
+    ; number of counts to move is small so we'll just wait for the counter to reach the
+    ; desired vaue
 
+; wait_until_done: watch the turntable counter until it reaches the CounterStop value
+;    this will be done at the lowest turntable speed
 wait_until_done:
     gosub StopHalfSecondTimer 
     long_minuend[0] = CounterStop[0]
@@ -90,17 +120,32 @@ wait_until_done:
         long_subtrahend[1] = TTCounter[1]
         gosub long_subtract
     loop until ((long_result[0] = 0) and (long_result[1] = 0)) or (long_result[1] & $8000)
+
+; turntable_stop: stop the turntable, this can happen under two circumstances
+;   1.  After "wait_until_done" has see the turntable counter reach the desired position at the slowest speed.
+;   2.  When positioning the turntable in program mode with the clockwise/counter clockwise keys.
+;       When the key is released, turntable_stop is called.  The turntable my be moving at any speed.
+;
 turntable_stop:
     gosub StopHalfSecondTimer 
 
     operate_mode = save_operate_mode
     display_update_needed = 1
-    if TURNTABLE_DIR1 = 0 and TURNTABLE_DIR2 = 0 then return  ; if already stopped return
+
+    if TURNTABLE_DIR1 = 0 and TURNTABLE_DIR2 = 0 then 
+        ; if already stopped, return
+        ; this never happens
+        return
+    endif
+
     TURNTABLE_DIR1 = 0     ; stop the turntable
     TURNTABLE_DIR2 = 0     ;
     TURNTABLE_DAC = 0
 
-    pause 600       ; about 600 milliseconds before turntable stops moving at full speed
+    ; if the turntable is moving at full speed, it will keep moving for up to 500 milliseconds
+    ; after the control signals stop the turntable motor.  We have to wait here long enough for
+    ; the movement to stop before reading the counter to determine the stop position.
+    pause 600
     TURNTABLE_COUNTER_ENABLE = 0
 
     gosub ReadTurntableCounter 
@@ -135,7 +180,7 @@ HalfSecondTimerExpired:
     gosub long_subtract
     long_minuend[0] = long_result[0]
     long_minuend[1] = long_result[1]
-    ;long_minuend contains the number of counts left until stop
+    ;long_minuend contains the number of counts left until we reach the desired position
 
     ExpectedCountsAtNextSpeed   var word
     if (TURNTABLE_DAC < MAX_DAC_VALUE) then
@@ -147,34 +192,40 @@ HalfSecondTimerExpired:
     long_subtrahend[1] = 0
     gosub long_subtract
 
-    ;(CounterStop - TTCounter) is the number of counts left before stopping
+    ;(CounterStop - TTCounter) (in long_minuend) is the number of counts left before stopping
     ;(RampDownCounts[TURNTABLE_DAC-1] + ExpectedCountsAtNextSpeed)) is the number of counts it will
     ;take to stop if we speed up to the next DAC value or hold at max speed
     ;if ((CounterStop - TTCounter) < (RampDownCounts[TURNTABLE_DAC-1] + ExpectedCountsAtNextSpeed)) then
     if (long_result[1] & $8000) then
+        ; need to slow down the turntable, slow down until the number of counts left to go (long_minuend) is 
+        ; less than the number of counts required to slow down from the turntable speed
         do
             TURNTABLE_DAC = TURNTABLE_DAC - 1
         loop until (TURNTABLE_DAC = 1) or ((long_minuend[1] = 0) and (long_minuend[0] > RampDownCounts[TURNTABLE_DAC-1]))
     else
+        ; it's OK to speed up the turntable (or keep moving at the max speed)
         if (TURNTABLE_DAC < MAX_DAC_VALUE) then
             TURNTABLE_DAC = TURNTABLE_DAC + 1
         endif
     endif
     if TURNTABLE_DAC = 1 then
+        ; once we've ramped down to the slowest speed, just wait until we get to the desired position
         gosub wait_until_done
     endif
     return
 
 ;=============================================================================
 turntable_counterclockwise:
-    ; goto zero or until key is released
+    ; in program mode, the counter clockwise key was pressed, goto position
+    ; zero or until the key is released
     position_to_goto[0] = TT_ZERO_OFFSET_LO
     position_to_goto[1] = TT_ZERO_OFFSET_HI
     goto turntable_goto_position
 
 ;=============================================================================
 turntable_clockwise:
-    ; goto max or until key is released
+    ; in program mode, the clockwise key was pressed, goto the maximum position
+    ; or until the key is released
     long_addend1[0] = TT_ZERO_OFFSET_LO
     long_addend1[1] = TT_ZERO_OFFSET_HI
     long_addend2[0] = TT_MAX_POSITION_LO
@@ -185,21 +236,33 @@ turntable_clockwise:
     goto turntable_goto_position
 
 ;=============================================================================
+; turntable_next_location: look up the "next" preprogrammed stop in EEPROM
+;   intput: tt_stop is the ordinal value of the current position
+;   output: tt_stop is updated
+;           desired_tt_position - the turntable position corresonding to tt_stop
+;
 turntable_next_location:
     if (loconet_switch = $ffff) or (tt_stop = MAX_TT_STOPS - 1) then return
     tt_stop = tt_stop + 1
     gosub turntable_ee_read_stop
     if tt_ee_switch != $ffff then
+        ; found a new location
         loconet_switch = tt_ee_switch
         last_switch_request = tt_ee_switch
         desired_tt_position[0] = tt_ee_position[0]
         desired_tt_position[1] = tt_ee_position[1]
     else
+        ; already at end of list so don't change anything
         tt_stop = tt_stop - 1
     endif
     return
 
 ;=============================================================================
+; turntable_previous_location: look up the "previous" preprogrammed stop in EEPROM
+;   intput: tt_stop is the ordinal value of the current position
+;   output: tt_stop is updated
+;           desired_tt_position - the turntable position corresonding to tt_stop
+;
 turntable_previous_location:
     if (loconet_switch = $ffff) or (tt_stop = 0) then return
     tt_stop = tt_stop - 1
@@ -211,31 +274,42 @@ turntable_previous_location:
     return
 
 ;=============================================================================
+; handle_switch_request: a Loconet switch request packet was received
+;   input: loconet_switch
+;
 handle_switch_request:
+    ; see if this switch is stored a a preprogrammed stop in EEPROM
     gosub turntable_ee_look_up_loconet_switch
     if (tt_ee_switch = loconet_switch) then
+        ; loconet_switch found in translate table
         desired_tt_position[0] = tt_ee_position[0]
         desired_tt_position[1] = tt_ee_position[1]
-        ; loconet_switch found in translate table
         last_switch_request = loconet_switch
-        if operate_mode = MODE_PROGRAM then return
+        if operate_mode = MODE_OPERATE then
+            position_to_goto[0] = desired_tt_position[0]
+            position_to_goto[1] = desired_tt_position[1]
+            goto turntable_goto_position
+        endif
     else
         ; loconet_switch not found in translate table
         if operate_mode = MODE_OPERATE then 
+            ; ignore the switch request
             loconet_switch = last_switch_request
         else
             desired_tt_position[0] = $ffff
             desired_tt_position[1] = $ffff
         endif
-        return
     endif
-    position_to_goto[0] = desired_tt_position[0]
-    position_to_goto[1] = desired_tt_position[1]
-    goto turntable_goto_position
+    return
 
 ;=============================================================================
+; turntable_set_translation: save a preprogrammed stop in EEPROM
+;   input:  currrent_tt_loc is the current turntable position
+;           loconet_switch the loconet switch number that identifies the stop
+;
 turntable_set_translation:
     if (loconet_switch = $ffff) or ((current_tt_loc[0] = $ffff) and (current_tt_loc[1] = $ffff)) then return
+    ; see if an existing preprogrammed stop exists corresponding to loconet_switch
     gosub turntable_ee_look_up_loconet_switch
     if (tt_stop = MAX_TT_STOPS) then
         ; EEPROM is full
@@ -246,6 +320,9 @@ turntable_set_translation:
     tt_ee_switch = loconet_switch
     tt_ee_position[0] = current_tt_loc[0]
     tt_ee_position[1] = current_tt_loc[1]
+    ; if an existing stop existed, this will update the stop with the
+    ; current position.  if it didn't exist, this will add the new
+    ; stop to the end of the list
     goto turntable_ee_write_stop
 
 ;=============================================================================
@@ -254,6 +331,10 @@ turntable_initialize:
     TURNTABLE_DIR2 = 0
     TURNTABLE_DAC = 0
 
+    ; RampDownCounts contains the number of turntable counts it will take
+    ; to stop the turntable from a given turntable speed.  The table is
+    ; indexed by the DAC value minus 1 so RampDownCounts[0] is the number
+    ; of counts it takes to stop the turntable at the slowest DAC setting.
     RampDownCounts[ 0] = 10 
     RampDownCounts[ 1] = 44 
     RampDownCounts[ 2] = 108 

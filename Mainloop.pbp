@@ -1,19 +1,25 @@
 ;=============================================================================
 ; This is the mainloop of the program
 ;=============================================================================
+
+if OperateProgramSwitch then
+    operate_mode = MODE_OPERATE
+else
+    operate_mode = MODE_PROGRAM
+endif
+
 GLOBAL_INTERRUPT_ENABLE = 1
+
 display_update_needed = 1
+
 mainloop:
     if display_update_needed then 
         gosub update_display
         display_update_needed = 0
     endif
 
-#ifdef DO_POWER_DOWN
-    gosub power_down_check
-#endif
-
 #ifdef DO_LOCONET
+    ; check to see if any Loconet data has been received
     gosub loconet_receive
 #endif
 

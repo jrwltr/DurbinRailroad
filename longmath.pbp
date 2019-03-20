@@ -6,6 +6,11 @@ long_subtrahend var word[2] bank0 system
 long_result     var word[2] bank0 system
 
 ;=============================================================================
+; long_add: add two 32 bit numbers
+;   input:  long_addend1
+;           long_addend2
+;   output: long_result
+;
 long_add:
 ASM
     clrf    BSR                             ; set bank to 0
@@ -30,6 +35,11 @@ ASM
 ENDASM
 
 ;=============================================================================
+; long_add: subtract two 32 bit numbers
+;   input:  long_minuend
+;           long_subtrahend
+;   output: long_result
+;
 long_subtract:
 ASM
     clrf    BSR                             ; set bank to 0

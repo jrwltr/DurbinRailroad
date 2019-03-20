@@ -9,9 +9,9 @@ RX_PACKET_LEN   con 2
 
 
 ;=============================================================================
-rx_byte             var byte
+rx_byte             var byte                ; last byte taken from receive FIFO
 rx_opcode           var byte                ; opcode from the last received packet 
-rx_checksum         var byte
+rx_checksum         var byte                ; checksum accumulation when receiving a packet
 rx_packet           var byte[RX_PACKET_LEN] ; a buffer to contain the packet contents
 rx_packet_index     var byte                ; index into rx_packet buffer
 rx_packet_length    var byte                ; number of bytes left in the packet being received
@@ -19,7 +19,7 @@ rx_packet_length    var byte                ; number of bytes left in the packet
 rx_state var byte                           ; current state of the receive state machine
     RX_STATE_WAITING_FOR_OPCODE con 0
     RX_STATE_WAITING_FOR_LENGTH con 1
-    RX_STATE_ACCUMULATING       con 2
+    RX_STATE_ACCUMULATING_DATA  con 2
 
 
 ;=============================================================================
@@ -48,6 +48,9 @@ switch_motor_direction  var byte
     SWITCH_MOTOR_TOGGLE con $80
 
 ;=============================================================================
+; loconet_receive: receive state machine for Loconet packets, called after 
+;   the interrupt routine detects received data
+;
 loconet_receive:
     while rx_head != rx_tail 
         rx_byte = rx_data_fifo[rx_head]
@@ -72,7 +75,7 @@ loconet_receive:
                     rx_state = RX_STATE_WAITING_FOR_LENGTH
                 else
                     rx_packet_length = 5
-                    rx_state = RX_STATE_ACCUMULATING
+                    rx_state = RX_STATE_ACCUMULATING_DATA
                 endif
             else
                 if rx_byte.5 then
@@ -80,12 +83,12 @@ loconet_receive:
                 else
                     rx_packet_length = 1
                 endif
-                rx_state = RX_STATE_ACCUMULATING
+                rx_state = RX_STATE_ACCUMULATING_DATA
             endif
             rx_packet_index = 0
         else
             rx_checksum = rx_checksum ^ rx_byte
-            if rx_state = RX_STATE_ACCUMULATING then
+            if rx_state = RX_STATE_ACCUMULATING_DATA then
                 rx_packet_length = rx_packet_length - 1
                 if rx_packet_length = 0 then
                     rx_state = RX_STATE_WAITING_FOR_OPCODE
@@ -109,7 +112,7 @@ loconet_receive:
                 endif
             elseif rx_state = RX_STATE_WAITING_FOR_LENGTH then
                 rx_packet_length = rx_byte
-                rx_state = RX_STATE_ACCUMULATING
+                rx_state = RX_STATE_ACCUMULATING_DATA
             endif
         endif
         rx_head = rx_head + 1

@@ -31,15 +31,16 @@ led_initialize:
 ;=============================================================================
 #ifdef LED_ON_OFF
 
+; led_on: turn on the requested LED
+;   input: led_to_change
+;
 led_on:
     LED[led_to_change] = 0
     return
 
-#endif
-
-;=============================================================================
-#ifdef LED_ON_OFF
-
+; led_off: turn off the requested LED
+;   input: led_to_change
+;
 led_off:
 #ifdef LED_BLINK
     led_blinking[led_to_change] = 0
@@ -51,9 +52,11 @@ led_off:
 
 ;=============================================================================
 ; led_flash - flash the LED once
+;   input: led_to_change
 ;
 led_flash:
     led_flash_count[led_to_change] = 10  ; number of timer ticks to leave LED on
+                                         ; about 80 milliseconds
     LED[led_to_change] = 0
     return
 
@@ -61,6 +64,8 @@ led_flash:
 #ifdef LED_BLINK
 
 ; led_blink - repeatedly blink the LED until led_off is called
+;   input: led_to_change
+;
 led_blink:
     led_blinking[led_to_change] = 1
     LED[led_to_change] = 0
@@ -69,7 +74,7 @@ led_blink:
 #endif
 
 ;=============================================================================
-; led_check should be called each time timer0 expires
+; led_check should be called after each timer tick (about every 8 milliseconds)
 ;
 led_check:
     for L = 0 to LED_COUNT-1

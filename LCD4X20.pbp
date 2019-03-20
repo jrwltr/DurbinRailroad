@@ -51,9 +51,7 @@ DisplayString VAR BYTE[DISPLAY_COLUMNS+1] ; +1 for null terminator
     ; display_write_string. The string must be null terminated.
 
 DisplayRow  VAR BYTE
-
 DisplayCol  VAR BYTE
-    ; Set DisplayRow and DisplayCol before a call to display_set_cursor.
 
 ;=============================================================================
 dspstr var byte[6]
@@ -61,27 +59,40 @@ dspstr var byte[6]
     ; I2CWRITE.
 
 ;=============================================================================
+; display_write_command8: write a command to the display in 8 bit mode
+;   input:  DisplayData contains the command
+;
 display_write_command8:
-    dspstr[0] = DisplayData + DISPLAY_BKLT
-    dspstr[1]=DisplayData|DISPLAY_BKLT|DISPLAY_E
-    dspstr[3]=DisplayData|DISPLAY_BKLT
+    dspstr[0] = DisplayData | DISPLAY_BKLT
+    dspstr[1] = DisplayData | DISPLAY_BKLT | DISPLAY_E
+    dspstr[3] = DisplayData | DISPLAY_BKLT
     I2CWRITE DISPLAY_I2C_DATA,DISPLAY_I2C_CLK,DISPLAY_I2C_ADDRESS,[STR dspstr \3]
     PAUSEUS 500
     RETURN
 
 ;=============================================================================
+; display_write_command4: write a command to the display in 4 bit mode
+;   input:  DisplayData contains the command
+;
 display_write_command4:
-    dspstr[0]= (DisplayData & $f0)|DISPLAY_BKLT
-    dspstr[1]= (DisplayData & $f0)|DISPLAY_BKLT|DISPLAY_E
-    dspstr[2]= (DisplayData & $f0)|DISPLAY_BKLT
-    dspstr[3]= ((DisplayData & $0f)<<4)|DISPLAY_BKLT
-    dspstr[4]= ((DisplayData & $0f)<<4)|DISPLAY_BKLT|DISPLAY_E
-    dspstr[5]= ((DisplayData & $0f)<<4)|DISPLAY_BKLT
+    dspstr[0]= (DisplayData & $f0)      | DISPLAY_BKLT
+    dspstr[1]= (DisplayData & $f0)      | DISPLAY_BKLT | DISPLAY_E
+    dspstr[2]= (DisplayData & $f0)      | DISPLAY_BKLT
+    dspstr[3]= ((DisplayData & $0f)<<4) | DISPLAY_BKLT
+    dspstr[4]= ((DisplayData & $0f)<<4) | DISPLAY_BKLT | DISPLAY_E
+    dspstr[5]= ((DisplayData & $0f)<<4) | DISPLAY_BKLT
     I2CWRITE DISPLAY_I2C_DATA,DISPLAY_I2C_CLK,DISPLAY_I2C_ADDRESS,[STR dspstr \6]
     PAUSEUS 1000
     RETURN
 
 ;=============================================================================
+; display_clear_to_end_of_line: fill the current line of the display with 
+;   spaces until end of line
+;
+; display_write_string: write a string to the the display at the current
+;   cursor position
+;   input: DisplayString - the null terminated string to be displayed
+;
 i var byte
 display_clear_to_end_of_line:
     ARRAYWRITE DisplayString, [REP " "\(DISPLAY_COLUMNS-DisplayCol), 0]
@@ -106,6 +117,10 @@ display_clear:
     goto display_write_command4
 
 ;=============================================================================    
+; display_set_cursor: set the display cursor position
+;   input:  DisplayRow
+;           DisplayCol
+;
 display_row_address var byte[DISPLAY_ROWS]
 display_set_cursor:
     if (DisplayRow >= DISPLAY_ROWS) or (DisplayCol >= DISPLAY_COLUMNS) then return

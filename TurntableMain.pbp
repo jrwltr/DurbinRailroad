@@ -5,10 +5,11 @@
 #define DO_LONG_EEPROM_FUNCTIONS
 #define USE_PIC_INTERNAL_EEPROM
 
+CLEAR       ; zero all variables
+
 INCLUDE "ProcessorConfiguration.pbp"
 
-CLEAR       ; zero all variables
-goto init   ; skip over interrupt service routine
+goto init   ; skip over interrupt service routine, functions, other included code
 
 INCLUDE "Interrupt.pbp"
 
@@ -33,6 +34,9 @@ INCLUDE "TurnTableEEPROM.pbp"
 INCLUDE "TurnTable.pbp"
 
 ;=============================================================================
+; display_long: write a long value to the display
+;   intput: long_minuend - the value to be displayed
+;
 display_long:
     if (long_minuend[0] = $ffff) and (long_minuend[1] = $ffff) then
         ; no translation found
@@ -178,12 +182,6 @@ gosub display_initialize
 gosub led_initialize
 gosub loconet_initialize 
 gosub turntable_initialize
-
-if OperateProgramSwitch then
-    operate_mode = MODE_OPERATE
-else
-    operate_mode = MODE_PROGRAM
-endif
 
 ;=============================================================================
 
