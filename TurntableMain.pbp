@@ -180,7 +180,7 @@ gosub loconet_initialize
 gosub turntable_initialize
 gosub interrupt_initialize 
 
-if PORTC.1 then
+if OperateProgramSwitch then
     operate_mode = MODE_OPERATE
 else
     operate_mode = MODE_PROGRAM

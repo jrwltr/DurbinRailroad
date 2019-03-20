@@ -1,12 +1,6 @@
 ;=============================================================================
 ; This module provides the DAC_write function for the PCF8591 DAC chip
 ;=============================================================================
-DAC_I2C_ADDRESS con $92
-
-DAC_I2C_CLK  var SCL2
-DAC_I2C_DATA var SDA2
-
-;=============================================================================
 ; PCF8591 command values...
 ;
 CTRL_BYTE_CHAN0     con $00

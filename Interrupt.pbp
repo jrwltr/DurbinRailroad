@@ -4,8 +4,8 @@ rx_data_fifo    var byte[RXFIFO_SIZE] bank0 SYSTEM
 rx_head         var byte bank0 SYSTEM
 rx_tail         var byte bank0 SYSTEM
 
-timer0_interrupt var byte bank0 SYSTEM
-timer3_interrupt var byte bank0 SYSTEM
+TimerTickInterrupt  var byte bank0 SYSTEM
+HalfSecondInterrupt var byte bank0 SYSTEM
 
 ;=============================================================================
 define INTHAND  isr
@@ -77,8 +77,8 @@ isr6:                                       ; endwhile
     bra     isr7                            ; if PIR0.TMR0IF = 1
     bcf     PIR0,5                          ;    PIR0.TMR0IF = 0
     clrf    BSR                             ;    set bank to 0
-    movlw   1                               ;    timer0_interrupt = 1
-    movwf   timer0_interrupt                ;
+    movlw   1                               ;    TimerTickInterrupt = 1
+    movwf   TimerTickInterrupt              ;
 isr7:                                       ; endif
     movlb   14                              ; set bank to 14
     btfss   PIR4,4                          ;
@@ -89,8 +89,8 @@ isr8:                                       ; endif
     bra     isr9                            ; if PIR4.TMR3IF = 1
     bcf     PIR4,2                          ;    PIR4.TMR3IF = 0
     clrf    BSR                             ;    set bank to 0
-    movlw   1                               ;    timer3_interrupt = 1
-    movwf   timer3_interrupt                ;
+    movlw   1                               ;    HalfSecondInterrupt = 1
+    movwf   HalfSecondInterrupt             ;
 isr9:                                       ; endif
     clrf    BSR                             ; set bank to 0
     movf    fsr0l_save,  W                  ; fsr0l = fsr0L_save
@@ -126,10 +126,8 @@ interrupt_initialize:
     PIE4.2 = 1      ; PIE4.TMR3IE = 1  enable timer 3 interrupt
 #endif
 
-    INTCON.6 = 1    ; INTCON.PEIE = 1       enable peripheral interrupt
-
-    ; global interrupt enable = 1
-    INTCON.7 = 1    ; INTCON.GIE = 1
+    PERIPHERAL_INTERRUPT_ENABLE = 1
+    GLOBAL_INTERRUPT_ENABLE = 1
     return
 
 ;=============================================================================

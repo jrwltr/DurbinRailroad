@@ -3,12 +3,6 @@
 ; 5 switch motors connected via one PCF8574 and one PCF8574A.
 ;=============================================================================
 
-SW_INTERFACE_I2C_CLK  var SCL1
-SW_INTERFACE_I2C_DATA var SDA1
-
-PCF8574_BASE_ADDRESS        con $40
-PCF8574A_BASE_ADDRESS       con $70
-
 I2C_INTERFACE_COUNT         con 3   ; number I2C channels that connect to switch motor banks
 BANKS_PER_INTERFACE         con 8   ; number of switch motor banks per I2C channel
 SWITCH_MOTORS_PER_BANK      con 5   ; number of switch motors per motor bank
@@ -105,7 +99,7 @@ switch_motor_write_from_eeprom:
         ee_address = SWITCH_MOTOR_STATE_EEPROM_ADDRESS + (switch_motor / SWITCH_MOTORS_PER_BANK)
         gosub eeprom_read_byte
         if switch_index < 4 then
-            i2c_addr = PCF8574_BASE_ADDRESS + (bank_index << 1)
+            i2c_addr = PCF8574_I2C_ADDRESS + (bank_index << 1)
             i2c_write_value = 0
             for k = 0 to 3
                 if ee_byte & (1 << k) then
@@ -115,7 +109,7 @@ switch_motor_write_from_eeprom:
                 endif
             next k
         else
-            i2c_addr = PCF8574A_BASE_ADDRESS + (bank_index << 1)
+            i2c_addr = PCF8574A_I2C_ADDRESS + (bank_index << 1)
             if ee_byte & $10 then
                 i2c_write_value = $fd
             else
@@ -212,14 +206,14 @@ debounce    var byte
 switch_motor_button_check:
     for interface_index = 0 to I2C_INTERFACE_COUNT-1
         debounce = interface_debounce[interface_index] << 1
-        if ((interface_index = 0) && (PORTC.5 == 0)) then ;??? || ((interface_index = 1) && (PORTC.5 = 0)) || ((interface_index = 2) && (PORTC.5 = 0))) then
+        if ((interface_index = 0) && (SWITCH_MOTOR_INTERRUPT_INTERFACE0 == 0)) then ;??? || ((interface_index = 1) && (SWITCH_MOTOR_INTERRUPT_INTERFACE1 = 0)) || ((interface_index = 2) && (SWITCH_MOTOR_INTERRUPT_INTERFACE2 = 0))) then
             debounce = debounce | 1
         endif
         interface_debounce[interface_index] = debounce
         if debounce = $7f then
             ; for each PCF8574 with buttons attached...
             for bank_index = 0 to BANKS_PER_INTERFACE-1
-                i2c_addr = PCF8574A_BASE_ADDRESS + (bank_index << 1)
+                i2c_addr = PCF8574A_I2C_ADDRESS + (bank_index << 1)
                 if interface_index = 0 then
                     I2CREAD SW_INTERFACE_I2C_DATA, SW_INTERFACE_I2C_CLK, i2c_addr, [ i2c_read_value ], i2c_read_error
                 elseif interface_index = 1 then

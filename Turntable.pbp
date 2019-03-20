@@ -1,10 +1,4 @@
-;????fix fine movements with clockwise/counterclockwise keys, don't debounce key release?
-
 ;=============================================================================
-TT_XOR  var PORTA.6
-TT_DIR1 var PORTC.2
-TT_DIR2 var PORTB.0
-
 desired_tt_position     var word[2]
 position_to_goto        var word[2]
 last_switch_request     var word
@@ -28,29 +22,6 @@ turntable_set_zero:
     current_tt_loc[0] = TT_ZERO_OFFSET_LO
     current_tt_loc[1] = TT_ZERO_OFFSET_HI
     goto turntable_ee_save_current_location
-
-;=============================================================================
-Timer1 var word[2]
-T var word
-read_timer1:
-    Timer1[1] = 0
-    do
-        T.byte0 = TMR1L
-        T.byte1 = TMR1H
-        if PIR4.0 then
-            ;timer overflowed
-            Timer1[1] = 1
-        endif
-        ; if timer ticked while reading, read again
-    loop until T.byte0 = TMR1L
-    Timer1[0] = T
-    return
-
-;=============================================================================
-turntable_stop_timer:
-    T5CON.0 = 0 ; T5CON.ON = 0
-    T3CON.0 = 0 ; T3CON.ON = 0
-    return
 
 ;=============================================================================
 CounterStop     var word[2]  ; number of counts before stopping timer
@@ -89,74 +60,63 @@ turntable_goto_position:
     operate_mode = MODE_MOVING
     gosub update_display
 
-    ; start timer1 in counter mode
-    T1CON.0 = 0     ; T1CON.TMR1ON = 0   disable timer 1
-    PIR4.0 = 0      ; PIR4.TMR1IF = 0  turn off timer1 interrupt flag
-    TMR1H = 0       ; TMR1H:TMR1L = 0
-    TMR1L = 0       ;
-    T1CON.0 = 1     ; T1CON.TMR1ON = 1   enable timer 1
+    gosub StartTurntableCounter
 
     ; set the direction
     if Clockwise then
-        TT_XOR  = 1
-        TT_DIR1 = 1
-        TT_DIR2 = 0
+        TURNTABLE_XOR  = 1
+        TURNTABLE_DIR1 = 1
+        TURNTABLE_DIR2 = 0
     else
-        TT_XOR  = 0
-        TT_DIR1 = 0
-        TT_DIR2 = 1
+        TURNTABLE_XOR  = 0
+        TURNTABLE_DIR1 = 0
+        TURNTABLE_DIR2 = 1
     endif
 
-    ; start turntable timer
-    TMR5L = 0       ; TMR5H:TMR5L = 0
-    TMR5H = 0
-    TMR3L = -8
-    TMR3H = $ff
-    T5CON.0 = 1 ; T5CON.ON = 1
-    T3CON.0 = 1 ; T3CON.ON = 1
+    gosub StartHalfSecondTimer
 
     ; start the turntable
-    DAC1CON1 = 1
+    TURNTABLE_DAC = 1
 
     if (CounterStop[1] != 0) || (CounterStop[0] > RampDownCounts[0] + RampDownCounts[1]) then return
 
 wait_until_done:
-    gosub turntable_stop_timer
+    gosub StopHalfSecondTimer 
     long_minuend[0] = CounterStop[0]
     long_minuend[1] = CounterStop[1]
     do
-        gosub read_timer1
-        long_subtrahend[0] = Timer1[0]
-        long_subtrahend[1] = Timer1[1]
+        gosub ReadTurntableCounter 
+        long_subtrahend[0] = TTCounter[0]
+        long_subtrahend[1] = TTCounter[1]
         gosub long_subtract
     loop until ((long_result[0] = 0) and (long_result[1] = 0)) or (long_result[1] & $8000)
 turntable_stop:
-    gosub turntable_stop_timer
+    gosub StopHalfSecondTimer 
 
     operate_mode = save_operate_mode
     display_update_needed = 1
-    if TT_DIR1 = 0 and TT_DIR2 = 0 then return  ; if already stopped return
-    TT_DIR1 = 0     ; stop the turntable
-    TT_DIR2 = 0     ;
-    DAC1CON1 = 0
+    if TURNTABLE_DIR1 = 0 and TURNTABLE_DIR2 = 0 then return  ; if already stopped return
+    TURNTABLE_DIR1 = 0     ; stop the turntable
+    TURNTABLE_DIR2 = 0     ;
+    TURNTABLE_DAC = 0
 
     pause 600       ; about 600 milliseconds before turntable stops moving at full speed
-    T1CON.0 = 0     ; T1CON.TMR1ON = 0   disable timer 1
+    TURNTABLE_COUNTER_ENABLE = 0
 
-    gosub read_timer1
-    if TT_XOR = 1 then
-        ; clockwise, current_tt_loc = current_tt_loc + Timer1
+    gosub ReadTurntableCounter 
+    if TURNTABLE_XOR = 1 then
+        ; clockwise, current_tt_loc = current_tt_loc + TTCounter
         long_addend1[0] = current_tt_loc[0]
         long_addend1[1] = current_tt_loc[1]
-        long_addend2[0] = Timer1[0]
-        long_addend2[1] = Timer1[1]
+        long_addend2[0] = TTCounter[0]
+        long_addend2[1] = TTCounter[1]
         gosub long_add
     else
-        ; counter clockwise, current_tt_loc = current_tt_loc - Timer1
+        ; counter clockwise, current_tt_loc = current_tt_loc - TTCounter
         long_minuend[0] = current_tt_loc[0]
         long_minuend[1] = current_tt_loc[1]
-        long_subtrahend[0] = Timer1[0]
-        long_subtrahend[1] = Timer1[1]
+        long_subtrahend[0] = TTCounter[0]
+        long_subtrahend[1] = TTCounter[1]
         gosub long_subtract
     endif
     current_tt_loc[0] = long_result[0]
@@ -164,45 +124,43 @@ turntable_stop:
     goto turntable_ee_save_current_location
 
 ;=============================================================================
-turntable_timer_expired:
-    ; reset timer 3
-    TMR3L = -8
-    TMR3H = $ff
+HalfSecondTimerExpired:
+    gosub ResetHalfSecondTimer
 
-    gosub read_timer1
+    gosub ReadTurntableCounter 
     long_minuend[0] = CounterStop[0]
     long_minuend[1] = CounterStop[1]
-    long_subtrahend[0] = Timer1[0]
-    long_subtrahend[1] = Timer1[1]
+    long_subtrahend[0] = TTCounter[0]
+    long_subtrahend[1] = TTCounter[1]
     gosub long_subtract
     long_minuend[0] = long_result[0]
     long_minuend[1] = long_result[1]
     ;long_minuend contains the number of counts left until stop
 
     ExpectedCountsAtNextSpeed   var word
-    if (DAC1CON1 < MAX_DAC_VALUE) then
-        ExpectedCountsAtNextSpeed = RampDownCounts[DAC1CON1  ] - RampDownCounts[DAC1CON1-1]
+    if (TURNTABLE_DAC < MAX_DAC_VALUE) then
+        ExpectedCountsAtNextSpeed = RampDownCounts[TURNTABLE_DAC  ] - RampDownCounts[TURNTABLE_DAC-1]
     else
         ExpectedCountsAtNextSpeed = RampDownCounts[MAX_DAC_VALUE-1] - RampDownCounts[MAX_DAC_VALUE-2]
     endif
-    long_subtrahend[0] = RampDownCounts[DAC1CON1-1] + ExpectedCountsAtNextSpeed
+    long_subtrahend[0] = RampDownCounts[TURNTABLE_DAC-1] + ExpectedCountsAtNextSpeed
     long_subtrahend[1] = 0
     gosub long_subtract
 
-    ;(CounterStop - Timer1) is the number of counts left before stopping
-    ;(RampDownCounts[DAC1CON1-1] + ExpectedCountsAtNextSpeed)) is the number of counts it will
+    ;(CounterStop - TTCounter) is the number of counts left before stopping
+    ;(RampDownCounts[TURNTABLE_DAC-1] + ExpectedCountsAtNextSpeed)) is the number of counts it will
     ;take to stop if we speed up to the next DAC value or hold at max speed
-    ;if ((CounterStop - Timer1) < (RampDownCounts[DAC1CON1-1] + ExpectedCountsAtNextSpeed)) then
+    ;if ((CounterStop - TTCounter) < (RampDownCounts[TURNTABLE_DAC-1] + ExpectedCountsAtNextSpeed)) then
     if (long_result[1] & $8000) then
         do
-            DAC1CON1 = DAC1CON1 - 1
-        loop until (DAC1CON1 = 1) or ((long_minuend[1] = 0) and (long_minuend[0] > RampDownCounts[DAC1CON1-1]))
+            TURNTABLE_DAC = TURNTABLE_DAC - 1
+        loop until (TURNTABLE_DAC = 1) or ((long_minuend[1] = 0) and (long_minuend[0] > RampDownCounts[TURNTABLE_DAC-1]))
     else
-        if (DAC1CON1 < MAX_DAC_VALUE) then
-            DAC1CON1 = DAC1CON1 + 1
+        if (TURNTABLE_DAC < MAX_DAC_VALUE) then
+            TURNTABLE_DAC = TURNTABLE_DAC + 1
         endif
     endif
-    if DAC1CON1 = 1 then
+    if TURNTABLE_DAC = 1 then
         gosub wait_until_done
     endif
     return
@@ -292,12 +250,9 @@ turntable_set_translation:
 
 ;=============================================================================
 turntable_initialize:
-    TT_DIR1 = 0
-    TT_DIR2 = 0
-    DAC1CON1 = 0
-    DAC1CON0 = 0
-    DAC1CON0.4 = 1   ; DAC1CON0.DACOE2 = 0    DAC is output to DACOUT2 pin
-    DAC1CON0.7 = 1   ; DAC1CON0.DACEN = 1     enable DAC 
+    TURNTABLE_DIR1 = 0
+    TURNTABLE_DIR2 = 0
+    TURNTABLE_DAC = 0
 
     RampDownCounts[ 0] = 10 
     RampDownCounts[ 1] = 44 
@@ -330,27 +285,6 @@ turntable_initialize:
     RampDownCounts[28] = 12948 
     RampDownCounts[29] = 13906 
     RampDownCounts[30] = 14906 
-
-    ; initialize timer 1, timer 1 is used as a counter to count the edges from the turntable sensor
-    TRISC.0 = 1     ; RC0 is input
-    T1GCON = 0      ; disable Timer1 gate control
-    T1CON = $84     ; clock source is T1CKI, prescale = 1:1, don't synchronize
-
-    ; use timers 3 and 5 to generate an interrupt about every 1/2 second
-    ; Timer 5 rolls over about every 65 milliseconds
-    ; Timer 3 counts when timer 5 rolls over.  Timer 3 is set to -8 and interrupts when it rolls
-    ; over to 0.  8 * 65 results in interrupts about every 520 milliseconds
-
-    ; initialize timer 5
-    T5GCON = 0      ; disable Timer5 gate control
-    T5CLK = 1       ; Timer5 clock is Fosc/4
-    T5CON = $30     ; prescale = 1:8
-    ; timer 5 now counts at Fosc/4/8 = 32/4/8 = 1Mhz, rolls over about every 65 milliseconds
-
-    ; initialize timer 3
-    T3GCON = 0      ; disable Timer3 gate control
-    T3CLK = $0b     ; Timer3 clock is timer 5 rollover
-    T3CON = $00     ; prescale = 1:1
 
     last_switch_request = $ffff
     desired_tt_position[0] = $ffff

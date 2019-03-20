@@ -54,27 +54,4 @@ ASM
 ENDASM
  
 ;=============================================================================
-long_dividend   var word[2]
-long_divisor    var word[2]
-long_quotient   var word[2]
-
-long_divide:
-    long_quotient[0] = -1;
-    long_quotient[1] = -1;
-    long_subtrahend[0] = long_divisor[0]
-    long_subtrahend[1] = long_divisor[1]
-    long_result[0] = long_dividend[0]
-    long_result[1] = long_dividend[1]
-    do
-        long_quotient[0] = long_quotient[0] + 1
-        if long_quotient[0] = 0 then long_quotient[1] = long_quotient[1] + 1
-        long_minuend[0] = long_result[0]
-        long_minuend[1] = long_result[1]
-        gosub long_subtract
-    loop until long_result[1] & $8000
-    long_result[0] = long_quotient[0]
-    long_result[1] = long_quotient[1]
-    return
-
-;=============================================================================
 

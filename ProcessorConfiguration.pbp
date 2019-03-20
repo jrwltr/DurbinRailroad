@@ -45,9 +45,157 @@ WPUA   = %10001111    'Set weak pullups on PORTA bits 0, 1, 2, 3 and 7, the rest
 ;=============================================================================
 SCL1     var PORTC.3 'IC pin 14 (RC3) is a hard or soft I2C Clock
 SDA1     var PORTC.4 'IC pin 15 (RC4) is a hard or soft I2C Data
+    SW_INTERFACE_I2C_CLK    var SCL1
+    SW_INTERFACE_I2C_DATA   var SDA1
 
 SCL2     var PORTA.4 'IC pin  6 (RA4) is a soft I2C Clock
 SDA2     var PORTA.5 'IC pin  7 (RA5) is a soft I2C Data
+    EEPROM_I2C_CLK          var SCL2
+    EEPROM_I2C_DATA         var SDA2
+    DISPLAY_I2C_CLK         var SCL2
+    DISPLAY_I2C_DATA        var SDA2
+    DAC_I2C_CLK             var SCL2
+    DAC_I2C_DATA            var SDA2
 
 ;=============================================================================
+OperateProgramSwitch    var PORTC.1
+
+;=============================================================================
+GLOBAL_INTERRUPT_ENABLE     var INTCON.7
+PERIPHERAL_INTERRUPT_ENABLE var INTCON.6
+
+;=============================================================================
+#ifdef USE_PIC_INTERNAL_EEPROM
+EEPROM_BYTES    con 256
+#else
+EEPROM_BYTES    con 16384
+#endif
+
+;=============================================================================
+ONBOARD_SWITCHES    var PORTA   ; low 4 bits
+
+;=============================================================================
+LED_COUNT   con 4
+LED         var PORTB.1  ; treated as an array of bits LED[0]...LED[3]
+
+;=============================================================================
+SWITCH_MOTOR_INTERRUPT_INTERFACE0  var PORTC.5
+;SWITCH_MOTOR_INTERRUPT_INTERFACE1  var ????
+;SWITCH_MOTOR_INTERRUPT_INTERFACE2  var ???? 
+
+;=============================================================================
+TURNTABLE_XOR  var PORTA.6
+TURNTABLE_DIR1 var PORTC.2
+TURNTABLE_DIR2 var PORTB.0
+
+;=============================================================================
+; Initialize UART for receiving Loconet data
+;
+#if __PROCESSOR__ = "16F18856"
+RXPPS = $17     ; pin select RX is RC7
+#endif
+#if __PROCESSOR__ = "16F19156"
+RX1PPS = $17    ; pin select RX is RC7
+#endif
+RC6PPS = $10    ; pin select TX is RC6 as output
+TX1STA = $20    ; TX9 = 0, TXEN = 1, SYNC = 0, BRGH = 0
+BAUD1CON = $10  ; SCKP = 1, BRG16 = 0   
+    ;SCKP = 1 inverts transmit for loopback testing
+SP1BRGH = 0
+SP1BRGL = 29    ; SP1RGH:SP1BRGL = ((OSC * 1000000) / (64 * 16500)) - 1
+                ;    OSC = 32
+                ;    64 is divisor chosen by SYNC, BRGH and BRG16
+                ;    16500 is the desired baud rate
+
+;=============================================================================
+PCF8574_I2C_ADDRESS     con $40 ; switch motor I/O expander
+PCF8574A_I2C_ADDRESS    con $70 ; switch motor I/O expander
+DISPLAY_I2C_ADDRESS     con $4E
+DAC_I2C_ADDRESS         con $92
+EEPROM_I2C_ADDRESS      con $A0
+
+#ifdef DO_TURNTABLE
+;=============================================================================
+TURNTABLE_DAC   var DAC1CON1
+
+    DAC1CON1 = 0
+    DAC1CON0 = 0
+    DAC1CON0.4 = 1   ; DAC1CON0.DACOE2 = 0    DAC is output to DACOUT2 pin
+    DAC1CON0.7 = 1   ; DAC1CON0.DACEN = 1     enable DAC 
+    ; initialize timer 1, timer 1 is used as a counter to count the edges from the turntable sensor
+    TRISC.0 = 1     ; RC0 is input
+    T1GCON = 0      ; disable Timer1 gate control
+    T1CON = $84     ; clock source is T1CKI, prescale = 1:1, don't synchronize
+
+    ; use timers 3 and 5 to generate an interrupt about every 1/2 second
+    ; Timer 5 rolls over about every 65 milliseconds
+    ; Timer 3 counts when timer 5 rolls over.  Timer 3 is set to -8 and interrupts when it rolls
+    ; over to 0.  8 * 65 results in interrupts about every 520 milliseconds
+
+    ; initialize timer 5
+    T5GCON = 0      ; disable Timer5 gate control
+    T5CLK = 1       ; Timer5 clock is Fosc/4
+    T5CON = $30     ; prescale = 1:8
+    ; timer 5 now counts at Fosc/4/8 = 32/4/8 = 1Mhz, rolls over about every 65 milliseconds
+
+    ; initialize timer 3
+    T3GCON = 0      ; disable Timer3 gate control
+    T3CLK = $0b     ; Timer3 clock is timer 5 rollover
+    T3CON = $00     ; prescale = 1:1
+
+;=============================================================================
+ResetHalfSecondTimer:
+    TMR3L = -8
+    TMR3H = $ff
+    return
+
+;=============================================================================
+StartHalfSecondTimer:
+    ; start turntable timer
+    TMR5L = 0       ; TMR5H:TMR5L = 0
+    TMR5H = 0
+    gosub ResetHalfSecondTimer
+    T5CON.0 = 1 ; T5CON.ON = 1
+    T3CON.0 = 1 ; T3CON.ON = 1
+    return
+
+;=============================================================================
+StopHalfSecondTimer:
+    T5CON.0 = 0 ; T5CON.ON = 0
+    T3CON.0 = 0 ; T3CON.ON = 0
+    return
+
+;=============================================================================
+TURNTABLE_COUNTER_ENABLE            var T1CON.0 ; T1CON.TMR1ON
+TURNTABLE_COUNTER_INTERRUPT_FLAG    var PIR4.0  ; PIR4.TMR1IF
+
+;=============================================================================
+StartTurntableCounter:
+    ; start timer1 in counter mode
+    TURNTABLE_COUNTER_ENABLE = 0
+    TURNTABLE_COUNTER_INTERRUPT_FLAG = 0
+    TMR1H = 0       ; TMR1H:TMR1L = 0
+    TMR1L = 0       ;
+    TURNTABLE_COUNTER_ENABLE = 1
+    return
+
+;=============================================================================
+TTCounter var word[2]
+T var word
+ReadTurntableCounter:
+    TTCounter[1] = 0
+    do
+        T.byte0 = TMR1L
+        T.byte1 = TMR1H
+        if TURNTABLE_COUNTER_INTERRUPT_FLAG then
+            ;timer overflowed
+            TTCounter[1] = 1
+        endif
+        ; if timer ticked while reading, read again
+    loop until T.byte0 = TMR1L
+    TTCounter[0] = T
+    return
+
+;=============================================================================
+#endif
 

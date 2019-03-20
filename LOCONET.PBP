@@ -120,25 +120,7 @@ loconet_receive:
 ;=============================================================================
 loconet_initialize:
     rx_state = RX_STATE_WAITING_FOR_OPCODE
-
-#if __PROCESSOR__ = "16F18856"
-    RXPPS = $17     ; pin select RX is RC7
-#endif
-#if __PROCESSOR__ = "16F19156"
-    RX1PPS = $17    ; pin select RX is RC7
-#endif
-    RC6PPS = $10    ; pin select TX is RC6 as output
-    TX1STA = $20    ; TX9 = 0, TXEN = 1, SYNC = 0, BRGH = 0
-    BAUD1CON = $10  ; SCKP = 1, BRG16 = 0   
-        ;SCKP = 1 inverts transmit for loopback testing
-    SP1BRGH = 0
-    SP1BRGL = 29    ; SP1RGH:SP1BRGL = ((OSC * 1000000) / (64 * 16500)) - 1
-                    ;    OSC = 32
-                    ;    64 is divisor chosen by SYNC, BRGH and BRG16
-                    ;    16500 is the desired baud rate
-
     loconet_switch = $ffff
-
     return
 
 ;=============================================================================

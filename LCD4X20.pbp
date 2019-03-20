@@ -7,13 +7,8 @@
 ; few commands use 8 bit accesses until the display can be set to 4 bit.
 ;=============================================================================
 
-DISPLAY_I2C_ADDRESS con $4E
-
 DISPLAY_ROWS    con 4
 DISPLAY_COLUMNS con 20
-
-DISPLAY_I2C_CLK  var SCL2
-DISPLAY_I2C_DATA var SDA2
 
 ;=============================================================================
 ; Display Commands

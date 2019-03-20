@@ -1,8 +1,6 @@
 ;=============================================================================
 ; Code to handle the on-board LEDs
 ;=============================================================================
-LED_COUNT   con 4
-LED        var PORTB.1  ; treated as an array of bits LED[0]...LED[3]
 
 LED_SWITCHMOTOR_BUTTON  con 0
 LED_ONBOARD_BUTTON      con 1

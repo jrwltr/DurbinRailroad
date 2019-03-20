@@ -16,12 +16,12 @@ mainloop:
     gosub loconet_receive
 #endif
 
-    timer var byte
-    INTCON.7 = 0 ; INTCON.GIE = 0
-    timer = timer0_interrupt
-    timer0_interrupt = 0
-    INTCON.7 = 1 ; INTCON.GIE = 1
-    if timer then
+    InterruptState var byte
+    GLOBAL_INTERRUPT_ENABLE = 0
+    InterruptState = TimerTickInterrupt
+    TimerTickInterrupt = 0
+    GLOBAL_INTERRUPT_ENABLE = 1
+    if InterruptState then
 #ifdef DO_SWITCHMOTOR
         gosub switch_motor_button_check
 #endif
@@ -29,12 +29,12 @@ mainloop:
         gosub led_check
     endif
 #ifdef DO_TURNTABLE
-    INTCON.7 = 0 ; INTCON.GIE = 0
-    timer = timer3_interrupt
-    timer3_interrupt = 0
-    INTCON.7 = 1 ; INTCON.GIE = 1
-    if timer then
-        gosub turntable_timer_expired
+    GLOBAL_INTERRUPT_ENABLE = 0
+    InterruptState = HalfSecondInterrupt
+    HalfSecondInterrupt = 0
+    GLOBAL_INTERRUPT_ENABLE = 1
+    if InterruptState then
+        gosub HalfSecondTimerExpired
     endif
 #endif
 

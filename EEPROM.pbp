@@ -5,18 +5,6 @@
 ; 
 ;=============================================================================
 
-#ifdef USE_PIC_INTERNAL_EEPROM
-EEPROM_BYTES    con 256
-#else
-EEPROM_I2C_ADDRESS  con $A0
-
-EEPROM_I2C_CLK  var SCL2
-EEPROM_I2C_DATA var SDA2
-
-EEPROM_BYTES    con 16384
-
-#endif
-
 ee_address      var word
 ee_byte         var byte
 ee_word         var word
