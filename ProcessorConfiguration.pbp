@@ -69,7 +69,6 @@ ONBOARD_SWITCHES    var PORTA   ; low 4 bits
 LED_COUNT   con 4
 LED         var PORTB.1  ; treated as an array of bits LED[0]...LED[3]
 
-LED[0] = 0
 ;=============================================================================
 #ifdef DO_SWITCHMOTOR
 SWITCH_MOTOR_INTERRUPT_INTERFACE0  var PORTC.5
@@ -186,7 +185,6 @@ TRISC.0 = 1     ; RC0 is input
 T1GCON = 0      ; disable Timer1 gate control
 T1CON = $84     ; clock source is T1CKI, prescale = 1:1, don't synchronize
 
-LED[2] = 0
 goto skip_funcs_2
 StartTurntableCounter:
     ; start timer1 in counter mode
@@ -219,7 +217,6 @@ skip_funcs_2:
 #endif
 
 ;=============================================================================
-LED[3] = 0
 
 PERIPHERAL_INTERRUPT_ENABLE = 1
 
