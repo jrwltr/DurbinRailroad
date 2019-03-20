@@ -69,6 +69,7 @@ ONBOARD_SWITCHES    var PORTA   ; low 4 bits
 LED_COUNT   con 4
 LED         var PORTB.1  ; treated as an array of bits LED[0]...LED[3]
 
+LED[0] = 0
 ;=============================================================================
 #ifdef DO_SWITCHMOTOR
 SWITCH_MOTOR_INTERRUPT_INTERFACE0  var PORTC.5
@@ -153,6 +154,8 @@ T3CON = $00     ; prescale = 1:1
 PIR4.2 = 0      ; PIR4.TMR3IF = 0  clear timer 3 interrupt flag
 PIE4.2 = 1      ; PIE4.TMR3IE = 1  enable timer 3 interrupt
 
+goto skip_funcs_1
+
 ResetHalfSecondTimer:
     TMR3L = -8
     TMR3H = $ff
@@ -171,6 +174,7 @@ StopHalfSecondTimer:
     T3CON.0 = 0 ; T3CON.ON = 0
     return
 
+skip_funcs_1:
 ;=============================================================================
 ; timer 1 is used in counter mode to count the edges from the turntable sensor
 
@@ -182,6 +186,8 @@ TRISC.0 = 1     ; RC0 is input
 T1GCON = 0      ; disable Timer1 gate control
 T1CON = $84     ; clock source is T1CKI, prescale = 1:1, don't synchronize
 
+LED[2] = 0
+goto skip_funcs_2
 StartTurntableCounter:
     ; start timer1 in counter mode
     TURNTABLE_COUNTER_ENABLE = 0
@@ -206,12 +212,14 @@ ReadTurntableCounter:
     loop until T.byte0 = TMR1L
     TTCounter[0] = T
     return
+skip_funcs_2:
 
 ;=============================================================================
 
 #endif
 
 ;=============================================================================
+LED[3] = 0
 
 PERIPHERAL_INTERRUPT_ENABLE = 1
 
