@@ -3,7 +3,6 @@
 #define DO_TURNTABLE
 #define DO_LOCONET
 #define DO_LONG_EEPROM_FUNCTIONS
-#define USE_PIC_INTERNAL_EEPROM
 
 CLEAR       ; zero all variables
 
