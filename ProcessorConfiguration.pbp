@@ -15,6 +15,53 @@ endasm
 #endif
 
 ;=============================================================================
+#if __PROCESSOR__ = "16F19156"
+#CONFIG
+    __config _CONFIG1, _FEXTOSC_OFF & _RSTOSC_HFINTPLL & _CLKOUTEN_OFF & _VBATEN_OFF & _LCDPEN_OFF & _CSWEN_ON & _FCMEN_ON
+    __config _CONFIG2, _MCLRE_ON & _PWRTE_PWRT_64 & _LPBOREN_OFF & _BOREN_SBOREN & _BORV_LO & _ZCD_OFF & _PPS1WAY_OFF & _STVREN_ON
+    __config _CONFIG3, _WDTCPS_WDTCPS_31 & _WDTE_SWDTEN & _WDTCWS_WDTCWS_7 & _WDTCCS_LFINTOSC
+    __config _CONFIG4, _BBSIZE_512 & _BBEN_OFF & _SAFEN_OFF & _WRTAPP_OFF & _WRTB_OFF & _WRTC_OFF & _WRTD_OFF & _WRTSAF_OFF & _LVP_OFF
+    __config _CONFIG5, _CP_OFF
+
+#ENDCONFIG
+#endif
+
+;=============================================================================
+#if __PROCESSOR__ = "18F13K22"
+#CONFIG
+    CONFIG  FOSC = HS             ; HS oscillator
+    CONFIG  PLLEN = OFF           ; PLL is under software control
+    CONFIG  PCLKEN = ON           ; Primary clock enabled
+    CONFIG  FCMEN = OFF           ; Fail-Safe Clock Monitor disabled
+    CONFIG  IESO = OFF            ; Oscillator Switchover mode disabled
+    CONFIG  PWRTEN = OFF          ; PWRT disabled
+    CONFIG  BOREN = SBORDIS       ; Brown-out Reset enabled in hardware only (SBOREN is disabled)
+    CONFIG  BORV = 19             ; VBOR set to 1.9 V nominal
+    CONFIG  WDTEN = ON            ; WDT is always enabled. SWDTEN bit has no effect.
+    CONFIG  WDTPS = 512           ; 1:512
+    CONFIG  HFOFST = ON           ; HFINTOSC starts clocking the CPU without waiting for the oscillator to stablize.
+    CONFIG  MCLRE = ON            ; MCLR pin enabled, RA3 input pin disabled
+    CONFIG  STVREN = ON           ; Stack full/underflow will cause Reset
+    CONFIG  LVP = OFF             ; Single-Supply ICSP disabled
+    CONFIG  BBSIZ = OFF           ; 512W boot block size
+    CONFIG  XINST = OFF           ; Instruction set extension and Indexed Addressing mode disabled (Legacy mode)
+    CONFIG  DEBUG = OFF           ; Background debugger disabled, RA0 and RA1 configured as general purpose I/O pins
+    CONFIG  CP0 = OFF             ; Block 0 not code-protected
+    CONFIG  CP1 = OFF             ; Block 1 not code-protected
+    CONFIG  CPB = OFF             ; Boot block not code-protected
+    CONFIG  CPD = OFF             ; Data EEPROM not code-protected
+    CONFIG  WRT0 = OFF            ; Block 0 not write-protected
+    CONFIG  WRT1 = OFF            ; Block 1 not write-protected
+    CONFIG  WRTC = OFF            ; Configuration registers not write-protected
+    CONFIG  WRTB = OFF            ; Boot block not write-protected
+    CONFIG  WRTD = OFF            ; Data EEPROM not write-protected
+    CONFIG  EBTR0 = OFF           ; Block 0 not protected from table reads executed in other blocks
+    CONFIG  EBTR1 = OFF           ; Block 1 not protected from table reads executed in other blocks
+    CONFIG  EBTRB = OFF           ; Boot block not protected from table reads executed in other blocks
+#ENDCONFIG
+#endif
+
+;=============================================================================
 ; DEFINEs:
 define OSC 32
 define I2C_SLOW 1   'Enables using 100KHz I2C device with OSC above 8MHz
@@ -22,58 +69,127 @@ define WRITE_INT 1  'Disables interrupts during EEPROM writes
 
 ;=============================================================================
 ; INITIALIZE REGISTERS:
+#if __PROCESSOR__ = "18F13K22"
+ANSEL  = %00000000    'Set all pins for digital operation
+ANSELH = %00000000
+OSCCON = %01110000    'Internal Osc set to 16MHz, clock determined by Config FOSC bits
+#else
 OSCCON1 = %00110000   'Internal Osc set to 16MHz, clock determined by Config FOSC bits
 ANSELA = %00000000    'Set all pins for digital operation
 ANSELB = %00000000
 ANSELC = %00000000
+#endif
 TRISA  = %10001111    'Set PORTA bits 0, 1, 2, 3, 7 as inputs, the rest as outputs
 TRISB  = %01100000    'Set PORTB bits 5, 6 as inputs, the rest as outputs
 TRISC  = %10100011    'Set PORTC bits 0, 1, 5, 7 as inputs, the rest as outputs
 WPUA   = %10001111    'Set weak pullups on PORTA bits 0, 1, 2, 3 and 7, the rest as outputs
 
 ;=============================================================================
-#ifdef DO_SWITCHMOTOR
-SCL1     var PORTC.3 'IC pin 14 (RC3) is a hard or soft I2C Clock
-SDA1     var PORTC.4 'IC pin 15 (RC4) is a hard or soft I2C Data
-    SW_INTERFACE_I2C_CLK    var SCL1
-    SW_INTERFACE_I2C_DATA   var SDA1
+#ifdef DO_DEVELOPMENT_BOARD
+    SCL1     var PORTC.3
+    SDA1     var PORTC.4
+    SCL2     var PORTA.4
+    SDA2     var PORTA.5
+#else
+#ifdef DO_TURNTABLE
+    SCL2     var PORTB.1
+    SDA2     var PORTC.0
+#endif
+#ifdef DO_SWITCH_EXTENSION
+    SCL1     var PORTB.4
+    SDA1     var PORTC.6
+    SCL2     var PORTC.0
+    SDA2     var PORTC.1
+#endif
+#ifdef DO_SWITCH_CONTROLLER
+    SCL1     var PORTA.0
+    SDA1     var PORTA.1
+    SCL2     var PORTA.3
+    SDA2     var PORTA.4
+#endif
 #endif
 
-SCL2     var PORTA.4 'IC pin  6 (RA4) is a soft I2C Clock
-SDA2     var PORTA.5 'IC pin  7 (RA5) is a soft I2C Data
-#ifndef USE_PIC_INTERNAL_EEPROM
+#ifdef DO_SWITCHMOTOR
+#ifdef DO_DEVELOPMENT_BOARD
+    SW0_INTERFACE_I2C_CLK    var SCL1
+    SW0_INTERFACE_I2C_DATA   var SDA1
+#else
+    SW0_INTERFACE_I2C_CLK    var SCL1
+    SW0_INTERFACE_I2C_DATA   var SDA1
+    SW1_INTERFACE_I2C_CLK    var SCL2
+    SW1_INTERFACE_I2C_DATA   var SDA2
+#endif
+#endif
+
+#ifdef DO_EEPROM
     EEPROM_I2C_CLK          var SCL2
     EEPROM_I2C_DATA         var SDA2
 #endif
+
+#ifdef DO_DISPLAY
     DISPLAY_I2C_CLK         var SCL2
     DISPLAY_I2C_DATA        var SDA2
+#endif
 
 ;=============================================================================
-OperateProgramSwitch    var PORTC.1
+#ifdef DO_OPERATE_PROGRAM
+#ifdef DO_DEVELOPMENT_BOARD
+    OperateProgramSwitch    var PORTC.1
+#else
+#ifdef DO_TURNTABLE
+    OperateProgramSwitch    var PORTA.7
+#endif
+#ifdef DO_SWITCH_CONTROLLER
+    OperateProgramSwitch    var PORTC.4
+#endif
+#endif
+#endif
 
 ;=============================================================================
 GLOBAL_INTERRUPT_ENABLE     var INTCON.7
 PERIPHERAL_INTERRUPT_ENABLE var INTCON.6
 
 ;=============================================================================
-#ifdef USE_PIC_INTERNAL_EEPROM
-EEPROM_BYTES    con 256
-#else
+#ifdef DO_EEPROM
 EEPROM_BYTES    con 16384
 #endif
 
 ;=============================================================================
-ONBOARD_SWITCHES    var PORTA   ; low 4 bits
+#ifdef DO_DEVELOPMENT_BOARD
+    ONBOARD_SWITCHES    var PORTA   ; low 4 bits
+#else
+#ifdef DO_TURNTABLE
+    ONBOARD_SWITCHES    var PORTC   ; low 4 bits
+#endif
+#ifdef DO_SWITCH_CONTROLLER
+    ONBOARD_SWITCHES    var PORTB   ; low 4 bits
+#endif
+#endif
 
 ;=============================================================================
-LED_COUNT   con 4
-LED         var PORTB.1  ; treated as an array of bits LED[0]...LED[3]
+#ifdef DO_DEVELOPMENT_BOARD
+    LED_COUNT   con 4
+    LED         var PORTB.1  ; treated as an array of bits LED[0]...LED[3]
+#endif
+#ifdef DO_SWITCH_EXTENSION
+    LED_COUNT   con 1
+    LED         var PORTA.5
+#endif
 
 ;=============================================================================
 #ifdef DO_SWITCHMOTOR
-SWITCH_MOTOR_INTERRUPT_INTERFACE0  var PORTC.5
-;SWITCH_MOTOR_INTERRUPT_INTERFACE1  var ????
-;SWITCH_MOTOR_INTERRUPT_INTERFACE2  var ???? 
+#ifdef DO_DEVELOPMENT_BOARD
+    SWITCH_MOTOR_INTERFACE0_INTERRUPT  var PORTC.5
+#else
+#ifdef DO_SWITCH_EXTENSION
+    SWITCH_MOTOR_INTERFACE0_INTERRUPT  var PORTA.2
+    SWITCH_MOTOR_INTERFACE1_INTERRUPT  var PORTC.2
+#endif
+#ifdef DO_SWITCH_CONTROLLER
+    SWITCH_MOTOR_INTERFACE0_INTERRUPT  var PORTA.2
+    SWITCH_MOTOR_INTERFACE1_INTERRUPT  var PORTA.5
+#endif
+#endif
 #endif
 
 #ifdef DO_LOCONET
@@ -105,26 +221,42 @@ RC1STA.4 = 1    ; CREN = 1       enable the serial port receiver
 
 ;=============================================================================
 #ifdef DO_SWITCHMOTOR
-PCF8574_I2C_ADDRESS     con $40 ; switch motor I/O expander
-PCF8574A_I2C_ADDRESS    con $70 ; switch motor I/O expander
+    PCF8574_I2C_ADDRESS     con $40 ; switch motor I/O expander
+    PCF8574A_I2C_ADDRESS    con $70 ; switch motor I/O expander
 #endif
-DISPLAY_I2C_ADDRESS     con $4E
-EEPROM_I2C_ADDRESS      con $A0
+#ifdef DO_DISPLAY
+    DISPLAY_I2C_ADDRESS     con $4E
+#endif
+#ifdef DO_EEPROM
+    EEPROM_I2C_ADDRESS      con $A0
+#endif
 
 ;=============================================================================
 ; initialize timer 0 interrupts for interrupts about every 8 milliseconds
 TMR0H = $ff     ; timer 0 8 bit comparator value
 TMR0L = 0       ; timer 0 counter starts at zero
+#if __PROCESSOR__ = "18F13K22"
+T0CON = $47     ; T0CON.TMR0ON = 0 (disable), T0CON.T08BIT = 1 (8 bit counter), T0CON.T0PS<2:0> = 7 (1:256 prescale)
+INTCON.2 = 0    ; INTCON.TMR0IF = 0  clear timer 0 interrupt flag
+INTCON.5 = 1    ; INTCON.TMR0IE = 1  enable timer 0 interrupt
+T0CON.7 = 1     ; T0CON.TMR0ON = 1 (enable), T0CON.T08BIT = 1 (8 bit counter), T0CON.T0PS<2:0> = 7 (1:256 prescale)
+#else
 T0CON1 = $68    ; T0CON1.TOCS<2:0> = HFINTOSC, T0CON1.T0ASYNC = 0, T0CON1.T0CKPS<3:0> = 8 (1:256 prescaler)
 PIR0.5 = 0      ; PIR0.TMR0IF = 0  clear timer 0 interrupt flag
 PIE0.5 = 1      ; PIE0.TMR0IE = 1  enable timer 0 interrupt
 T0CON0 = $80    ; T0CON0.T0EN = 1  enable timer 0
+#endif
 
 #ifdef DO_TURNTABLE
 ;=============================================================================
-TURNTABLE_XOR  var PORTA.6
-TURNTABLE_DIR1 var PORTC.2
-TURNTABLE_DIR2 var PORTB.0
+#ifdef DO_DEVELOPMENT_BOARD
+    TURNTABLE_XOR  var PORTA.6
+    TURNTABLE_DIR1 var PORTC.2
+    TURNTABLE_DIR2 var PORTB.0
+#else
+    TURNTABLE_DIR1 var PORTA.0
+    TURNTABLE_DIR2 var PORTA.1
+#endif
 
 ;=============================================================================
 ; initialize the DAC to control turntable speed

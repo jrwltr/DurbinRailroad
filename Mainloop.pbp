@@ -41,7 +41,9 @@ mainloop:
 #ifdef DO_ONBOARD_SWITCHES
         gosub onboard_switch_check
 #endif
+#ifdef DO_LED
         gosub led_check
+#endif
     endif
 #ifdef DO_TURNTABLE
     GLOBAL_INTERRUPT_ENABLE = 0

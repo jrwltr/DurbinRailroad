@@ -15,14 +15,8 @@ ee_word         var word
 ;   output: ee_byte - the byte value read from eeprom
 ;
 eeprom_read_byte:
-
-#ifdef USE_PIC_INTERNAL_EEPROM
-    READ ee_address, ee_byte
-#else
     I2CWRITE EEPROM_I2C_DATA, EEPROM_I2C_CLK, EEPROM_I2C_ADDRESS, [ ee_address.byte1, ee_address.byte0 ]
     I2CREAD EEPROM_I2C_DATA, EEPROM_I2C_CLK, EEPROM_I2C_ADDRESS, [ ee_byte ]
-#endif
-
     return
 
 ;=============================================================================
@@ -31,14 +25,8 @@ eeprom_read_byte:
 ;           ee_byte - the byte value to be written to eeprom
 ;
 eeprom_write_byte:
-
-#ifdef USE_PIC_INTERNAL_EEPROM
-    WRITE  ee_address, ee_byte
-#else
     I2CWRITE EEPROM_I2C_DATA, EEPROM_I2C_CLK, EEPROM_I2C_ADDRESS, [ ee_address.byte1, ee_address.byte0, ee_byte ]
     pause 10
-#endif
-
     return
 
 ;=============================================================================
@@ -47,14 +35,8 @@ eeprom_write_byte:
 ;           ee_word - the word value read from eeprom
 ;
 eeprom_read_word:
-
-#ifdef USE_PIC_INTERNAL_EEPROM
-    READ ee_address, word ee_word
-#else
     I2CWRITE EEPROM_I2C_DATA, EEPROM_I2C_CLK, EEPROM_I2C_ADDRESS, [ ee_address.byte1, ee_address.byte0 ]
     I2CREAD EEPROM_I2C_DATA, EEPROM_I2C_CLK, EEPROM_I2C_ADDRESS, [ ee_word.byte1, ee_word.byte0 ]
-#endif
-
     return
 
 ;=============================================================================
@@ -63,14 +45,8 @@ eeprom_read_word:
 ;           ee_word - the word value to be written to eeprom
 ;
 eeprom_write_word:
-
-#ifdef USE_PIC_INTERNAL_EEPROM
-    WRITE ee_address, word ee_word
-#else
     I2CWRITE EEPROM_I2C_DATA, EEPROM_I2C_CLK, EEPROM_I2C_ADDRESS, [ ee_address.byte1, ee_address.byte0, ee_word.byte1, ee_word.byte0 ]
     pause 10
-#endif
-
     return
 
 #ifdef DO_LONG_EEPROM_FUNCTIONS
@@ -85,17 +61,10 @@ ee_long0    var word
 ;           ee_long - the long value read from eeprom
 ;
 eeprom_read_long:
-
-#ifdef USE_PIC_INTERNAL_EEPROM
-    READ ee_address  , word ee_long[0]
-    READ ee_address+2, word ee_long[1]
-#else
     I2CWRITE EEPROM_I2C_DATA, EEPROM_I2C_CLK, EEPROM_I2C_ADDRESS, [ ee_address.byte1, ee_address.byte0 ]
     I2CREAD EEPROM_I2C_DATA, EEPROM_I2C_CLK, EEPROM_I2C_ADDRESS, [ ee_long0.byte1, ee_long0.byte0, ee_long1.byte1, ee_long1.byte0 ]
     ee_long[0] = ee_long0
     ee_long[1] = ee_long1
-#endif
-
     return
 
 ;=============================================================================
@@ -105,17 +74,10 @@ eeprom_read_long:
 ;
 
 eeprom_write_long:
-
-#ifdef USE_PIC_INTERNAL_EEPROM
-    WRITE ee_address  , word ee_long[0]
-    WRITE ee_address+2, word ee_long[1]
-#else
     ee_long0 = ee_long[0]
     ee_long1 = ee_long[1]
     I2CWRITE EEPROM_I2C_DATA, EEPROM_I2C_CLK, EEPROM_I2C_ADDRESS, [ ee_address.byte1, ee_address.byte0, ee_long0.byte1, ee_long0.byte0, ee_long1.byte1, ee_long1.byte0 ]
     pause 10
-#endif
-
     return
 
 ;=============================================================================

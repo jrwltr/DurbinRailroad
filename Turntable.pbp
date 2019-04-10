@@ -86,11 +86,15 @@ turntable_goto_position:
 
     ; set the direction
     if Clockwise then
+#ifdef DO_DEVELOPMENT_BOARD
         TURNTABLE_XOR  = 1
+#endif
         TURNTABLE_DIR1 = 1
         TURNTABLE_DIR2 = 0
     else
+#ifdef DO_DEVELOPMENT_BOARD
         TURNTABLE_XOR  = 0
+#endif
         TURNTABLE_DIR1 = 0
         TURNTABLE_DIR2 = 1
     endif
@@ -149,7 +153,7 @@ turntable_stop:
     TURNTABLE_COUNTER_ENABLE = 0
 
     gosub ReadTurntableCounter 
-    if TURNTABLE_XOR = 1 then
+    if TURNTABLE_DIR1 = 1 then
         ; clockwise, current_tt_loc = current_tt_loc + TTCounter
         long_addend1[0] = current_tt_loc[0]
         long_addend1[1] = current_tt_loc[1]

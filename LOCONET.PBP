@@ -94,8 +94,10 @@ loconet_receive:
                     rx_state = RX_STATE_WAITING_FOR_OPCODE
                     if rx_checksum = $ff then
                         ; valid packet received
+#ifdef DO_DEVELOPEMENT_BOARD
                         led_to_change = LED_LOCONET_PKT
                         gosub led_flash
+#endif
                         if (rx_opcode = OPC_SW_REQ) and (rx_packet[1] & $10) then 
                             ; key was pressed on CAB
                             display_update_needed = 1

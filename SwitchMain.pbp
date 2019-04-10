@@ -1,11 +1,13 @@
-
 ;=============================================================================
-
 #define DO_SWITCHMOTOR
 #define DO_LOCONET
 #define DO_DISPLAY
 #define DO_OPERATE_PROGRAM
 #define DO_ONBOARD_SWITCHES
+#define DO_EEPROM
+#define DO_SWITCH_CONTROLLER
+
+;=============================================================================
 
 CLEAR       ; zero all variables
 
@@ -28,12 +30,15 @@ switch_motor    var byte
 display_update_needed  var bit
 
 ;=============================================================================
+#ifdef DO_LED
 INCLUDE "LED.pbp"
+#endif
 INCLUDE "LCD4X20.pbp"
 INCLUDE "EEPROM.pbp"
 INCLUDE "OnboardSwitches.pbp"
 INCLUDE "LOCONET.pbp"
 INCLUDE "SwitchMotor.pbp"
+INCLUDE "SwitchRoutes.pbp"
 
 ;=============================================================================
 update_display:
@@ -155,6 +160,7 @@ button_1_pressed:
 #ifdef ERASE_EEPROM
     elseif operate_mode = MODE_OPERATE then
         gosub switch_motor_erase_eeprom
+        gosub route_erase_eeprom
 #endif
     endif
     return
@@ -248,7 +254,9 @@ route_no_key_repeat:
 ;=============================================================================
 init:
 gosub display_initialize
+#ifdef DO_LED
 gosub led_initialize
+#endif
 gosub loconet_initialize 
 gosub switch_motor_initialize
 

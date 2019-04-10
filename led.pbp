@@ -2,10 +2,18 @@
 ; Code to handle the on-board LEDs
 ;=============================================================================
 
+#ifdef DO_SWITCHMOTOR
 LED_SWITCHMOTOR_BUTTON  con 0
+#endif
+#ifdef DO_DEVELOPEMENT_BOARD
+#ifdef DO_ONBOARD_SWITCHES
 LED_ONBOARD_BUTTON      con 1
+#endif
+#ifdef DO_LOCONET
 LED_LOCONET_PKT         con 2
+#endif
 LED_DEBUG               con 3
+#endif
 
 led_to_change var byte
     ; set led_to_change before calling led_on, led_off, led_flash, and led_blink.
@@ -22,10 +30,9 @@ led_blinking    var byte[LED_COUNT] ; keep track of the LEDs that are being blin
 ;=============================================================================
 led_initialize:
     ; all LEDs off
-    LED[0] = 1
-    LED[1] = 1
-    LED[2] = 1
-    LED[3] = 1
+    for L = 0 to LED_COUNT-1
+        LED[L] = 1
+    next L
     return
 
 ;=============================================================================

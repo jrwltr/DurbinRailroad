@@ -1,11 +1,13 @@
 ;=============================================================================
-
 #define DO_TURNTABLE
 #define DO_LOCONET
-#define DO_LONG_EEPROM_FUNCTIONS
 #define DO_DISPLAY
 #define DO_OPERATE_PROGRAM
 #define DO_ONBOARD_SWITCHES
+#define DO_EEPROM
+#define DO_LONG_EEPROM_FUNCTIONS
+
+;=============================================================================
 
 CLEAR       ; zero all variables
 
@@ -26,7 +28,9 @@ loconet_switch      var word
 display_update_needed  var bit
 
 ;=============================================================================
+#ifdef DO_DEVELOPMENT_BOARD
 INCLUDE "LED.pbp"
+#endif
 INCLUDE "LCD4X20.pbp"
 INCLUDE "EEPROM.pbp"
 INCLUDE "OnboardSwitches.pbp"
@@ -181,7 +185,9 @@ button_4_released:
 ;=============================================================================
 init:
 gosub display_initialize
+#ifdef DO_LED
 gosub led_initialize
+#endif
 gosub loconet_initialize 
 gosub turntable_initialize
 
