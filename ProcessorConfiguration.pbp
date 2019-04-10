@@ -76,6 +76,7 @@ SWITCH_MOTOR_INTERRUPT_INTERFACE0  var PORTC.5
 ;SWITCH_MOTOR_INTERRUPT_INTERFACE2  var ???? 
 #endif
 
+#ifdef DO_LOCONET
 ;=============================================================================
 ; Initialize UART for receiving Loconet data
 ;
@@ -100,6 +101,7 @@ PIR3.4 = 0      ; PIR3.TXIF = 0  clear serial port transmit interrupt flag
 RC1STA.7 = 1    ; SPEN = 1       enable serial port
 PIE3.5 = 1      ; RCIE = 1       enable receive interrupt
 RC1STA.4 = 1    ; CREN = 1       enable the serial port receiver
+#endif
 
 ;=============================================================================
 #ifdef DO_SWITCHMOTOR

@@ -1,0 +1,34 @@
+;=============================================================================
+
+#define DO_SWITCHMOTOR
+#define DO_SWITCH_EXTENSION
+
+CLEAR       ; zero all variables
+
+INCLUDE "ProcessorConfiguration.pbp"
+
+goto init   ; skip over interrupt service routine, functions, other included code
+
+INCLUDE "Interrupt.pbp"
+
+;=============================================================================
+loconet_switch      var word
+switch_motor    var byte
+
+;=============================================================================
+INCLUDE "LED.pbp"
+INCLUDE "SwitchMotor.pbp"
+
+;=============================================================================
+init:
+gosub led_initialize
+gosub switch_motor_initialize
+
+;=============================================================================
+
+INCLUDE "Mainloop.pbp"
+
+;=============================================================================
+
+    End
+

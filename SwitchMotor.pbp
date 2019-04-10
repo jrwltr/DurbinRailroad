@@ -10,9 +10,11 @@ SWITCH_MOTORS_PER_BANK      con 5   ; number of switch motors per motor bank
 SWITCH_MOTOR_COUNT          con 120 ;(I2C_INTERFACE_COUNT * BANKS_PER_INTERFACE * SWITCH_MOTORS_PER_BANK)
     ; number of possible switch motors in the system
 
+#ifndef DO_SWITCH_EXTENSION
 TRANSLATE_TABLE_EEPROM_ADDRESS      con 0
 SWITCH_MOTOR_STATE_EEPROM_ADDRESS   con 240 ;SWITCH_MOTOR_COUNT * 2
 ROUTE_TABLE_EEPROM_ADDRESS          con 264 ;SWITCH_MOTOR_STATE_EEPROM_ADDRESS+(I2C_INTERFACE_COUNT * BANKS_PER_INTERFACE)
+#endif
 
 ;=============================================================================
 last_motor_button_state var bit[SWITCH_MOTOR_COUNT]
@@ -32,6 +34,7 @@ bank_index      var byte
 switch_index    var byte
 i2c_addr        var byte
 
+#ifndef DO_SWITCH_EXTENSION
 MAX_ROUTES          con 50
 MAX_ROUTE_SWITCHES  con 40
 ROUTE_STORAGE_SIZE  con 42   ; MAX_ROUTE_SWITCHES + 2
@@ -200,6 +203,7 @@ handle_switch_request:
         endif
     endif
     return
+#endif
 
 ;=============================================================================
 debounce    var byte
@@ -231,9 +235,12 @@ switch_motor_button_check:
                     if i2c_read_value & ($8 << switch_index) then
                         ; if the button changed state...
                         if last_motor_button_state[sm] = 0 then
+#ifdef DO_DISPLAY
                             display_update_needed = 1
+#endif
                             led_to_change = LED_SWITCHMOTOR_BUTTON
                             gosub led_flash
+#ifdef DO_OPERATE_PROGRAM
                             if operate_mode == MODE_OPERATE then
                                 switch_motor_direction = SWITCH_MOTOR_TOGGLE
                                 gosub switch_motor_write
@@ -249,11 +256,18 @@ switch_motor_button_check:
                                     gosub eeprom_write_word
                                 endif
                             endif
+#endif
+#ifndef DO_SWITCH_EXTENSION
                             switch_motor = sm
                             ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS + (sm * 2)
                             gosub eeprom_read_word
+#endif
+#ifdef DO_LOCONET
                             loconet_switch = ee_word
+#endif
+#ifndef DO_SWITCH_EXTENSION
                             route_number = ROUTE_NOT_FOUND
+#endif
                         endif
                         last_motor_button_state[sm] = 1
                     else
@@ -268,6 +282,7 @@ i2c_read_error:
 
 ;=============================================================================
 switch_motor_initialize:
+#ifndef DO_SWITCH_EXTENSION
     ;write all the switch motor controls to match the values read from eeprom
     for switch_motor = 0 to (SWITCH_MOTOR_COUNT-SWITCH_MOTORS_PER_BANK) step SWITCH_MOTORS_PER_BANK
         gosub switch_motor_write_from_eeprom
@@ -275,8 +290,6 @@ switch_motor_initialize:
         gosub switch_motor_write_from_eeprom
         switch_motor = switch_motor - (SWITCH_MOTORS_PER_BANK - 1)
     next switch_motor
-
-    switch_motor = $ff
 
     ; count the number of routes stored in EEPROM
     route_number = ROUTE_NOT_FOUND
@@ -286,8 +299,12 @@ switch_motor_initialize:
         if (ee_word = $ffff) then exit
         route_num_routes = route_num_routes + 1
     next ee_address
+#endif
+    switch_motor = $ff
+
     return
 
+#ifndef DO_SWITCH_EXTENSION
 ;=============================================================================
 ; Routes storage in eeprom...
 ;   route number    word    the switch number from the Digitrax CAB
@@ -471,4 +488,6 @@ switch_motor_erase_eeprom:
 #endif
 
 ;=============================================================================
+
+#endif
 

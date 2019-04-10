@@ -3,6 +3,9 @@
 #define DO_TURNTABLE
 #define DO_LOCONET
 #define DO_LONG_EEPROM_FUNCTIONS
+#define DO_DISPLAY
+#define DO_OPERATE_PROGRAM
+#define DO_ONBOARD_SWITCHES
 
 CLEAR       ; zero all variables
 
