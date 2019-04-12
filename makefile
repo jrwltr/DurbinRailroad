@@ -1,12 +1,14 @@
 ##############################################################################
-HEXTARGETS =	TurntableMain.hex \
-				TurntableMainDev.hex \
-				SwitchMain.hex \
-				SwitchMainDev.hex \
-			   	SwitchExtensionMain.hex
-
-##############################################################################
-ASMFLAGS = q
+HEXTARGETS  =	TurntableMain.hex
+				TurntableMain_PROCESSOR			= 16F18856
+HEXTARGETS +=	TurntableMainDev.hex
+				TurntableMainDev_PROCESSOR		= 16F18856
+HEXTARGETS +=	SwitchMain.hex
+				SwitchMain_PROCESSOR			= 16F19156
+HEXTARGETS +=	SwitchMainDev.hex
+				SwitchMainDev_PROCESSOR			= 16F18856
+HEXTARGETS +=	SwitchExtensionMain.hex
+				SwitchExtensionMain_PROCESSOR	= 18F13K22
 
 ##############################################################################
 all: $(HEXTARGETS)
@@ -37,13 +39,6 @@ SWITCH_EXTENSION_SOURCE =	SwitchExtensionMain.pbp \
 							SwitchMotor.pbp
 
 ##############################################################################
-TurntableMain_PROCESSOR			= 16F18856 
-TurntableMainDev_PROCESSOR		= 16F18856 
-SwitchMain_PROCESSOR			= 16F19156
-SwitchMainDev_PROCESSOR			= 16F18856 
-SwitchExtensionMain_PROCESSOR	= 18F13K22
-
-##############################################################################
 TurntableMainDev.hex					: TurntableMainDev.pbp
 TurntableMainDev.hex TurntableMain.hex	: $(TURNTABLE_SOURCE) $(COMMON_SOURCE)
 
@@ -54,8 +49,14 @@ SwitchExtensionMain.hex					: $(SWITCH_EXTENSION_SOURCE) $(COMMON_SOURCE)
 
 TurntableMainDev.hex SwitchMainDev.hex SwitchExtensionMain.hex:	LED.pbp
 
+##############################################################################
 $(HEXTARGETS):
-	pbpx -ampasmx -o$(ASMFLAGS) -p$($(basename $<)_PROCESSOR) $< 
+	pbpx -ampasmx -oq -p$($(basename $<)_PROCESSOR) $<
+	@del $(basename $<).asm
+	@del $(basename $<).mac
+	@del $(basename $<).o
+	@del $(basename $<).err
+	@del $(basename $<).lst
 
 ##############################################################################
 

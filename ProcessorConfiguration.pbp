@@ -196,7 +196,12 @@ EEPROM_BYTES    con 16384
 ;=============================================================================
 ; Initialize UART for receiving Loconet data
 ;
+#if __PROCESSOR__ = "16F18856"
 RXPPS = $17     ; pin select RX is RC7
+#endif
+#if __PROCESSOR__ = "16F19156"
+RX1PPS = $17     ; pin select RX is RC7
+#endif
 RC6PPS = $10    ; pin select TX is RC6 as output
 TX1STA = $20    ; TX9 = 0, TXEN = 1, SYNC = 0, BRGH = 0
 BAUD1CON = $10  ; SCKP = 1, BRG16 = 0   
