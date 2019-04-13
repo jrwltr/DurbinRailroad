@@ -36,7 +36,8 @@ SWITCH_SOURCE 			=	SwitchMain.pbp \
 							LOCONET.pbp \
 
 SWITCH_EXTENSION_SOURCE =	SwitchExtensionMain.pbp \
-							SwitchMotor.pbp
+							SwitchMotor.pbp \
+							LOCONET.pbp
 
 ##############################################################################
 TurntableMainDev.hex					: TurntableMainDev.pbp

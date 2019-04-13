@@ -196,6 +196,27 @@ EEPROM_BYTES    con 16384
 ;=============================================================================
 ; Initialize UART for receiving Loconet data
 ;
+#if __PROCESSOR__ = "18F13K22"
+TXSTA = $20     ; TX9 = 0, TXEN = 1, SYNC = 0, BRGH = 0
+BAUDCON = $10   ; SCKP = 1, BRG16 = 0   
+    ;SCKP = 1 inverts transmit for loopback testing
+SPBRGH = 0
+SPBRG = 29      ; SP1RGH:SP1BRG = ((OSC * 1000000) / (64 * 16500)) - 1
+                ;    OSC = 32
+                ;    64 is divisor chosen by SYNC, BRGH and BRG16
+                ;    16500 is the desired baud rate
+
+while PIR1.5    ; read receive register until receive interrupt disappears
+ASM
+    movlb   15        ; set bank to 15
+    movf    RCREG, W  ; W = RCREG
+ENDASM
+wend
+PIR1.4 = 0      ; PIR3.TXIF = 0  clear serial port transmit interrupt flag
+RCSTA.7 = 1     ; SPEN = 1       enable serial port
+PIE1.5 = 1      ; RCIE = 1       enable receive interrupt
+RCSTA.4 = 1     ; CREN = 1       enable the serial port receiver
+#else
 #if __PROCESSOR__ = "16F18856"
 RXPPS = $17     ; pin select RX is RC7
 #endif
@@ -222,6 +243,7 @@ PIR3.4 = 0      ; PIR3.TXIF = 0  clear serial port transmit interrupt flag
 RC1STA.7 = 1    ; SPEN = 1       enable serial port
 PIE3.5 = 1      ; RCIE = 1       enable receive interrupt
 RC1STA.4 = 1    ; CREN = 1       enable the serial port receiver
+#endif
 #endif
 
 ;=============================================================================

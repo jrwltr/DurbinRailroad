@@ -130,9 +130,11 @@ switch_motor_write_from_eeprom:
         pause 10
 i2c_write_error:
         return
+#endif
 
 ;=============================================================================
 handle_switch_request:
+#ifdef DO_SWITCH_CONTROLLER
     switch_motor = $ff
     for ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS to (TRANSLATE_TABLE_EEPROM_ADDRESS + (2 * (SWITCH_MOTOR_COUNT-1))) step 2
         gosub eeprom_read_word
@@ -201,8 +203,11 @@ handle_switch_request:
              endif
         endif
     endif
-    return
 #endif
+#ifdef DO_SWITCH_EXTENSION
+    ;????write the switch motor
+#endif
+    return
 
 ;=============================================================================
 debounce    var byte

@@ -100,7 +100,9 @@ loconet_receive:
 #endif
                         if (rx_opcode = OPC_SW_REQ) and (rx_packet[1] & $10) then 
                             ; key was pressed on CAB
+#ifdef DO_DISPLAY
                             display_update_needed = 1
+#endif
                             loconet_switch = ((rx_packet[1] & $f) << 7) + rx_packet[0]
                             switch_motor_direction = rx_packet[1] & SWITCH_MOTOR_CLOSED
                             gosub handle_switch_request

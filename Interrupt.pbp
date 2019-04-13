@@ -4,22 +4,158 @@ rx_data_fifo    var byte[RXFIFO_SIZE] bank0 SYSTEM
 rx_head         var byte bank0 SYSTEM
 rx_tail         var byte bank0 SYSTEM
 
+;=============================================================================
 TimerTickInterrupt  var byte bank0 SYSTEM
-HalfSecondInterrupt var byte bank0 SYSTEM
+
+#if __PROCESSOR__ = "18F13K22"
+ASM
+
+CheckTimerTick macro
+    movlb   15                              ; set bank to 15
+    btfss   INTCON,2                        ;
+    bra     tt                              ; if INTCON.TMR0IF = 1
+    bcf     INTCON,2                        ;    INTCON.TMR0IF = 0
+    clrf    BSR                             ;    set bank to 0
+    movlw   1                               ;    TimerTickInterrupt = 1
+    movwf   TimerTickInterrupt              ;
+tt:                                         ; endif
+    endm
+
+ENDASM
+#else
+ASM
+
+CheckTimerTick macro
+    movlb   14                              ; set bank to 14
+    btfss   PIR0,5                          ;
+    bra     tt                              ; if PIR0.TMR0IF = 1
+    bcf     PIR0,5                          ;    PIR0.TMR0IF = 0
+    clrf    BSR                             ;    set bank to 0
+    movlw   1                               ;    TimerTickInterrupt = 1
+    movwf   TimerTickInterrupt              ;
+tt:                                         ; endif
+    endm
+
+ENDASM
+#endif
 
 ;=============================================================================
-define INTHAND  isr
+#ifdef DO_TURNTABLE
+HalfSecondInterrupt var byte bank0 SYSTEM
+ASM
+CheckTurntableTimer  macro
+    movlb   14                              ; set bank to 14
+    btfss   PIR4,4                          ;
+    bra     ttt1                            ; if PIR4.TMR5IF = 1
+    bcf     PIR4,4                          ;    PIR4.TMR5IF = 0
+ttt1:                                       ; endif
+    btfss   PIR4,2                          ;
+    bra     ttt2                            ; if PIR4.TMR3IF = 1
+    bcf     PIR4,2                          ;    PIR4.TMR3IF = 0
+    clrf    BSR                             ;    set bank to 0
+    movlw   1                               ;    HalfSecondInterrupt = 1
+    movwf   HalfSecondInterrupt             ;
+ttt2:                                       ; endif
+    endm
+ENDASM
+#else
+ASM
+CheckTurntableTimer  macro
+    endm
+ENDASM
+#endif
 
+;=============================================================================
 fsr0l_save      var byte bank0 SYSTEM
 fsr0h_save      var byte bank0 SYSTEM
 
 ASM
-isr:
+
+InterruptEntry  macro
     clrf    BSR                             ; set bank to 0
     movf    FSR0L,W                         ;
     movwf   fsr0l_save                      ; fsr0l_save = fsr0l
     movf    FSR0H,W                         ;
     movwf   fsr0h_save                      ; fsr0h_save = fsr0h
+    endm
+
+InterruptExit   macro
+    clrf    BSR                             ; set bank to 0
+    movf    fsr0l_save,  W                  ; fsr0l = fsr0L_save
+    movwf   FSR0L                           ;
+    movf    fsr0h_save,  W                  ; fsr0h = fsr0H_save
+    movwf   FSR0H                           ;
+    clrf    BSR                             ; set bank to 0
+    endm
+
+ENDASM
+
+;=============================================================================
+#if __PROCESSOR__ = "18F13K22"
+
+ASM
+
+CheckReceiveInterrupt   macro
+isr1:                                       ;
+    movlb   15                              ; set bank to 15
+    btfss   PIR1,5                          ;
+    bra     isr6                            ; while PIR3.RCIF = 1
+    btfss   RCSTA, 2                        ;     if RCSTA.FERR then
+    bra     isr2                            ;         framing error
+    movf    RCREG, W                        ;         W = RC1REG
+    bcf     RCSTA, 7                        ;         RC1STA.7 = 0 ; SPEN = 0 reset the serial port
+    bsf     RCSTA, 7                        ;         RC1STA.7 = 1 ; SPEN = 1
+                                            ;         could notify the upper layer but protocol doesn't require it
+    bra     isr6                            ;         break;
+isr2:                                       ;
+    btfss   RCSTA, 1                        ;     elseif RC1STA.OERR then
+    bra     isr3                            ;         overrun error
+    bcf     RCSTA, 4                        ;         RC1STA.4 = 0 ; CREN = 0 to clear error
+    bsf     RCSTA, 4                        ;         RC1STA.4 = 1 ; CREN = 1
+                                            ;         could notify the upper layer but protocol doesn't require it
+    bra     isr6                            ;         break;
+isr3:                                       ;     else
+    clrf    BSR                             ;         set bank to 0
+    movf    rx_tail, W                      ;         W = rx_tail
+    addlw   rx_data_fifo                    ;         W = W + rx_data_fifo
+    movwf   FSR0L                           ;         FSR0L = W
+    clrf    FSR0H                           ;         FSR0H = 0
+    movf    rx_tail, W                      ;
+    addlw   1                               ;
+    subwf   rx_head, W                      ;
+    btfss   STATUS, 2                       ;         if rx_tail + 1 == rx_head then
+    bra     isr4                            ;
+                                            ;             fifo full
+                                            ;             could notify the upper layer but protocol doesn't require it
+    movlb   15                              ;             set bank to 15
+    movf    RCREG, W                        ;             W = RCREG
+    bra     isr1                            ;
+isr4:                                       ;         else
+    movf    rx_tail, W                      ;
+    addlw   1                               ;
+    movwf   rx_tail                         ;             rx_tail = rx_tail + 1
+    sublw   _RXFIFO_SIZE                    ;
+    btfss   STATUS, 2                       ;             if rx_tail == RXFIFO_SIZE
+    bra     isr5                            ;
+    movlb   0                               ;                 set bank to 0
+    movwf   rx_tail                         ;                 rx_tail = 0
+isr5:                                       ;             endif
+    movlb   15                              ;             set bank to 15
+    movf    RCREG, W                        ;             W = RCREG
+    clrf    BSR                             ;             set bank to 0
+    movwf   INDF0                           ;             store rx data in fifo
+                                            ;         endif
+    bra     isr1                            ;     endif
+isr6:                                       ; endwhile
+    endm
+
+ENDASM
+
+#else
+
+ASM
+
+CheckReceiveInterrupt   macro
 isr1:                                       ;
     movlb   14                              ; set bank to 14
     btfss   PIR3,5                          ;
@@ -72,32 +208,21 @@ isr5:                                       ;             endif
                                             ;         endif
     bra     isr1                            ;     endif
 isr6:                                       ; endwhile
-    movlb   14                              ; set bank to 14
-    btfss   PIR0,5                          ;
-    bra     isr7                            ; if PIR0.TMR0IF = 1
-    bcf     PIR0,5                          ;    PIR0.TMR0IF = 0
-    clrf    BSR                             ;    set bank to 0
-    movlw   1                               ;    TimerTickInterrupt = 1
-    movwf   TimerTickInterrupt              ;
-isr7:                                       ; endif
-    movlb   14                              ; set bank to 14
-    btfss   PIR4,4                          ;
-    bra     isr8                            ; if PIR4.TMR5IF = 1
-    bcf     PIR4,4                          ;    PIR4.TMR5IF = 0
-isr8:                                       ; endif
-    btfss   PIR4,2                          ;
-    bra     isr9                            ; if PIR4.TMR3IF = 1
-    bcf     PIR4,2                          ;    PIR4.TMR3IF = 0
-    clrf    BSR                             ;    set bank to 0
-    movlw   1                               ;    HalfSecondInterrupt = 1
-    movwf   HalfSecondInterrupt             ;
-isr9:                                       ; endif
-    clrf    BSR                             ; set bank to 0
-    movf    fsr0l_save,  W                  ; fsr0l = fsr0L_save
-    movwf   FSR0L                           ;
-    movf    fsr0h_save,  W                  ; fsr0h = fsr0H_save
-    movwf   FSR0H                           ;
-    clrf    BSR                             ; set bank to 0
+    endm
+ENDASM
+
+#endif
+
+;=============================================================================
+define INTHAND  isr
+
+ASM
+isr:
+    InterruptEntry
+    CheckReceiveInterrupt
+    CheckTimerTick                          ;
+    CheckTurntableTimer                     ;
+    InterruptExit                           ;
     retfie
 ENDASM
 

@@ -1,5 +1,6 @@
 #define DO_SWITCHMOTOR
 #define DO_SWITCH_EXTENSION
+#define DO_LOCONET
 #define DO_LED
 
 ;=============================================================================
@@ -18,11 +19,13 @@ switch_motor        var byte
 
 ;=============================================================================
 INCLUDE "LED.pbp"
+INCLUDE "LOCONET.pbp"
 INCLUDE "SwitchMotor.pbp"
 
 ;=============================================================================
 init:
 gosub led_initialize
+gosub loconet_initialize 
 gosub switch_motor_initialize
 
 ;=============================================================================
