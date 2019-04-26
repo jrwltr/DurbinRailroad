@@ -34,10 +34,11 @@ SWITCH_SOURCE 			=	SwitchMain.pbp \
 							EEPROM.pbp \
 							OnboardSwitches.pbp \
 							LOCONET.pbp \
+							RS485.pbp
 
 SWITCH_EXTENSION_SOURCE =	SwitchExtensionMain.pbp \
 							SwitchMotor.pbp \
-							LOCONET.pbp
+							RS485.pbp
 
 ##############################################################################
 TurntableMainDev.hex					: TurntableMainDev.pbp

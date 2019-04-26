@@ -1,6 +1,4 @@
 ;=============================================================================
-OPC_SW_REQ  con $B0 ;LOCONET opcode for a switch request
-
 RX_PACKET_LEN   con 2
     ; RX_PACKET_LEN is the number of bytes that will be saved from 
     ; each LOCONET packet.  It does not include the packet opcode or checksum.
@@ -17,29 +15,6 @@ rx_packet_index     var byte                ; index into rx_packet buffer
 rx_packet_length    var byte                ; number of bytes left in the packet being received
 
 rx_state var byte                           ; current state of the receive state machine
-    RX_STATE_WAITING_FOR_OPCODE con 0
-    RX_STATE_WAITING_FOR_LENGTH con 1
-    RX_STATE_ACCUMULATING_DATA  con 2
-
-
-;=============================================================================
-;sample transmit code that we don't use at this time...
-;
-;LOCONET_MAX_TX_COUNT    con 5
-;
-;loconet_tx_string var byte[LOCONET_MAX_TX_COUNT]
-;
-loconet_transmit:
-;    ii var byte
-;    for ii = 0 to LOCONET_MAX_TX_COUNT-1
-;        if loconet_tx_string[ii] = 0 then exit
-;            ; this isn't a reasonable test, prevents transmitting a zero
-;            ; needs a better way to know transmit string length
-;        while PIR3.4 = 0 ; while PIR3.TXIF = 0  wait for TX1REG empty
-;        wend
-;        TX1REG = loconet_tx_string[ii]
-;    next ii
-;    return
 
 ;=============================================================================
 switch_motor_direction  var byte

@@ -1,8 +1,17 @@
 ;=============================================================================
 RXFIFO_SIZE con 16
-rx_data_fifo    var byte[RXFIFO_SIZE] bank0 SYSTEM
-rx_head         var byte bank0 SYSTEM
-rx_tail         var byte bank0 SYSTEM
+
+#ifdef DO_LOCONET
+rx_data_fifo        var byte[RXFIFO_SIZE] bank0 SYSTEM
+rx_head             var byte bank0 SYSTEM
+rx_tail             var byte bank0 SYSTEM
+#endif
+
+#ifdef DO_RS485
+rs485_rx_data_fifo  var byte[RXFIFO_SIZE] bank0 SYSTEM
+rs485_rx_head       var byte bank0 SYSTEM
+rs485_rx_tail       var byte bank0 SYSTEM
+#endif
 
 ;=============================================================================
 TimerTickInterrupt  var byte bank0 SYSTEM
@@ -58,11 +67,6 @@ ttt1:                                       ; endif
 ttt2:                                       ; endif
     endm
 ENDASM
-#else
-ASM
-CheckTurntableTimer  macro
-    endm
-ENDASM
 #endif
 
 ;=============================================================================
@@ -91,15 +95,15 @@ InterruptExit   macro
 ENDASM
 
 ;=============================================================================
+#ifdef DO_RS485
 #if __PROCESSOR__ = "18F13K22"
 
 ASM
-
-CheckReceiveInterrupt   macro
+CheckRS485ReceiveInterrupt   macro
 isr1:                                       ;
     movlb   15                              ; set bank to 15
     btfss   PIR1,5                          ;
-    bra     isr6                            ; while PIR3.RCIF = 1
+    bra     isr6                            ; while PIR1.RCIF = 1
     btfss   RCSTA, 2                        ;     if RCSTA.FERR then
     bra     isr2                            ;         framing error
     movf    RCREG, W                        ;         W = RC1REG
@@ -116,14 +120,14 @@ isr2:                                       ;
     bra     isr6                            ;         break;
 isr3:                                       ;     else
     clrf    BSR                             ;         set bank to 0
-    movf    rx_tail, W                      ;         W = rx_tail
-    addlw   rx_data_fifo                    ;         W = W + rx_data_fifo
+    movf    rs485_rx_tail, W                ;         W = rs485_rx_tail
+    addlw   rs485_rx_data_fifo              ;         W = W + rs485_rx_data_fifo
     movwf   FSR0L                           ;         FSR0L = W
     clrf    FSR0H                           ;         FSR0H = 0
-    movf    rx_tail, W                      ;
+    movf    rs485_rx_tail, W                ;
     addlw   1                               ;
-    subwf   rx_head, W                      ;
-    btfss   STATUS, 2                       ;         if rx_tail + 1 == rx_head then
+    subwf   rs485_rx_head, W                ;
+    btfss   STATUS, 2                       ;         if rs485_rx_tail + 1 == rs485_rx_head then
     bra     isr4                            ;
                                             ;             fifo full
                                             ;             could notify the upper layer but protocol doesn't require it
@@ -131,14 +135,14 @@ isr3:                                       ;     else
     movf    RCREG, W                        ;             W = RCREG
     bra     isr1                            ;
 isr4:                                       ;         else
-    movf    rx_tail, W                      ;
+    movf    rs485_rx_tail, W                ;
     addlw   1                               ;
-    movwf   rx_tail                         ;             rx_tail = rx_tail + 1
+    movwf   rs485_rx_tail                   ;             rs485_rx_tail = rs485_rx_tail + 1
     sublw   _RXFIFO_SIZE                    ;
-    btfss   STATUS, 2                       ;             if rx_tail == RXFIFO_SIZE
+    btfss   STATUS, 2                       ;             if rs485_rx_tail == RXFIFO_SIZE
     bra     isr5                            ;
     movlb   0                               ;                 set bank to 0
-    movwf   rx_tail                         ;                 rx_tail = 0
+    movwf   rs485_rx_tail                   ;                 rs485_rx_tail = 0
 isr5:                                       ;             endif
     movlb   15                              ;             set bank to 15
     movf    RCREG, W                        ;             W = RCREG
@@ -152,14 +156,80 @@ isr6:                                       ; endwhile
 ENDASM
 
 #else
+ASM
+CheckRS485ReceiveInterrupt   macro
+isr1:                                       ;
+    movlb   14                              ; set bank to 14
+    btfss   PIR3,7                          ;
+    bra     isr6                            ; while PIR3.RC2IF = 1
+    movlb   20                              ;     set bank to 20
+    btfss   RC2STA, 2                       ;     if RC2STA.FERR then
+    bra     isr2                            ;         framing error
+    movf    RC2REG, W                       ;         W = RC2REG
+    bcf     RC2STA, 7                       ;         RC2STA.7 = 0 ; SPEN = 0 reset the serial port
+    bsf     RC2STA, 7                       ;         RC2STA.7 = 1 ; SPEN = 1
+                                            ;         could notify the upper layer but protocol doesn't require it
+    bra     isr6                            ;         break;
+isr2:                                       ;
+    btfss   RC2STA, 1                       ;     elseif RC2STA.OERR then
+    bra     isr3                            ;         overrun error
+    bcf     RC2STA, 4                       ;         RC2STA.4 = 0 ; CREN = 0 to clear error
+    bsf     RC2STA, 4                       ;         RC2STA.4 = 1 ; CREN = 1
+                                            ;         could notify the upper layer but protocol doesn't require it
+    bra     isr6                            ;         break;
+isr3:                                       ;     else
+    clrf    BSR                             ;         set bank to 0
+    movf    rs485_rx_tail, W                ;         W = rs485_rx_tail
+    addlw   rs485_rx_data_fifo              ;         W = W + rs485_rx_data_fifo
+    movwf   FSR0L                           ;         FSR0L = W
+    clrf    FSR0H                           ;         FSR0H = 0
+    movf    rs485_rx_tail, W                ;
+    addlw   1                               ;
+    subwf   rs485_rx_head, W                ;
+    btfss   STATUS, 2                       ;         if rx_tail + 1 == rs485_rx_head then
+    bra     isr4                            ;
+                                            ;             fifo full
+                                            ;             could notify the upper layer but protocol doesn't require it
+    movlb   20                              ;             set bank to 20
+    movf    RC2REG, W                       ;             W = RC2REG
+    bra     isr1                            ;
+isr4:                                       ;         else
+    movf    rs485_rx_tail, W                ;
+    addlw   1                               ;
+    movwf   rs485_rx_tail                   ;             rs485_rx_tail = rs485_rx_tail + 1
+    sublw   _RXFIFO_SIZE                    ;
+    btfss   STATUS, 2                       ;             if rx_tail == RXFIFO_SIZE
+    bra     isr5                            ;
+    clrw                                    ;
+    movwf   rs485_rx_tail                   ;                 rs485_rx_tail = 0
+isr5:                                       ;             endif
+    movlb   20                              ;             set bank to 20
+    movf    RC2REG, W                       ;             W = RC2REG
+    clrf    BSR                             ;             set bank to 0
+    movwf   INDF0                           ;             store rx data in fifo
+                                            ;         endif
+    bra     isr1                            ;     endif
+isr6:                                       ; endwhile
+    endm
+
+ENDASM
+
+#endif
+#endif
+
+;=============================================================================
+#ifdef DO_LOCONET
+#if __PROCESSOR__ = "18F13K22"
+;we don't do loconet on this processor (switch extension)
+#else
 
 ASM
 
-CheckReceiveInterrupt   macro
+CheckLoconetReceiveInterrupt   macro
 isr1:                                       ;
     movlb   14                              ; set bank to 14
     btfss   PIR3,5                          ;
-    bra     isr6                            ; while PIR3.RCIF = 1
+    bra     isr6                            ; while PIR3.RC1IF = 1
     movlb   2                               ;     set bank to 2
     btfss   RC1STA, 2                       ;     if RC1STA.FERR then
     bra     isr2                            ;         framing error
@@ -213,15 +283,24 @@ ENDASM
 
 #endif
 
+#endif
+
 ;=============================================================================
 define INTHAND  isr
 
 ASM
 isr:
     InterruptEntry
-    CheckReceiveInterrupt
+#ifdef DO_LOCONET
+    CheckLoconetReceiveInterrupt
+#endif
+#ifdef DO_RS485
+    CheckRS485ReceiveInterrupt
+#endif
     CheckTimerTick                          ;
+#ifdef DO_TURNTABLE
     CheckTurntableTimer                     ;
+#endif
     InterruptExit                           ;
     retfie
 ENDASM
