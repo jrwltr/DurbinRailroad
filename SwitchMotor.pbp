@@ -133,8 +133,8 @@ i2c_write_error:
 #endif
 
 ;=============================================================================
-handle_switch_request:
 #ifdef DO_SWITCH_CONTROLLER
+handle_switch_request:
     switch_motor = $ff
     for ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS to (TRANSLATE_TABLE_EEPROM_ADDRESS + (2 * (SWITCH_MOTOR_COUNT-1))) step 2
         gosub eeprom_read_word
@@ -203,11 +203,13 @@ handle_switch_request:
              endif
         endif
     endif
+    return
 #endif
 #ifdef DO_SWITCH_EXTENSION
-    ;????write the switch motor
-#endif
+handle_switch_request:
+    ;????write the switch motor, or write the switch bank
     return
+#endif
 
 ;=============================================================================
 debounce    var byte
@@ -286,6 +288,9 @@ switch_motor_button_check:
                             loconet_switch = ee_word
 #endif
                             route_number = ROUTE_NOT_FOUND
+#endif
+#ifdef DO_SWITCH_EXTENSION
+                            ;????send switch to controller
 #endif
                         endif
                         last_motor_button_state[sm] = 1

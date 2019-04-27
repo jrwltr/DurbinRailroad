@@ -1,5 +1,7 @@
 ;=============================================================================
-RS485_RX_PACKET_LEN   con 2
+rs485_address   var byte
+
+RS485_RX_PACKET_LEN   con 3
     ; RS485_RX_PACKET_LEN is the number of bytes that will be saved from 
     ; each packet.  It does not include the packet opcode or checksum.
     ; It's only big enough to contain the largest packet parsed by this code.
@@ -7,14 +9,14 @@ RS485_RX_PACKET_LEN   con 2
 
 
 ;=============================================================================
-rs484_rx_byte             var byte                ; last byte taken from receive FIFO
-rs484_rx_opcode           var byte                ; opcode from the last received packet 
-rs484_rx_checksum         var byte                ; checksum accumulation when receiving a packet
-rs484_rx_packet           var byte[RS485_RX_PACKET_LEN] ; a buffer to contain the packet contents
-rs484_rx_packet_index     var byte                ; index into rs484_rx_packet buffer
-rs484_rx_packet_length    var byte                ; number of bytes left in the packet being received
+rs485_rx_byte             var byte                ; last byte taken from receive FIFO
+rs485_rx_opcode           var byte                ; opcode from the last received packet 
+rs485_rx_checksum         var byte                ; checksum accumulation when receiving a packet
+rs485_rx_packet           var byte[RS485_RX_PACKET_LEN] ; a buffer to contain the packet contents
+rs485_rx_packet_index     var byte                ; index into rs485_rx_packet buffer
+rs485_rx_packet_length    var byte                ; number of bytes left in the packet being received
 
-rs484_rx_state var byte                           ; current state of the receive state machine
+rs485_rx_state var byte                           ; current state of the receive state machine
 
 
 ;=============================================================================
@@ -64,12 +66,20 @@ rs485_transmit:
     return
 
 ;=============================================================================
-; rs484_receive: receive state machine for Loconet packets, called after 
+rs485_send_ACK:
+    rs485_tx_opcode = OPC_ACK
+    rs485_tx_data[0] = 0;????rs485 address
+    rs485_tx_data[1] = 0;????sequence number?
+    rs485_tx_len = 2
+    goto rs485_transmit
+
+;=============================================================================
+; rs485_receive: receive state machine for Loconet packets, called after 
 ;   the interrupt routine detects received data
 ;
-rs484_receive:
+rs485_receive:
     while rs485_rx_head != rs485_rx_tail 
-        rs484_rx_byte = rs485_rx_data_fifo[rs485_rx_head]
+        rs485_rx_byte = rs485_rx_data_fifo[rs485_rx_head]
 #ifdef SHOW_RX_DATA
         SRD_Row var byte
         SRD_Col var byte
@@ -78,53 +88,63 @@ rs484_receive:
             DisplayCol = 0
             gosub display_set_cursor
         endif
-        ARRAYWRITE DisplayString, [hex rs484_rx_byte, " ", 0]
+        ARRAYWRITE DisplayString, [hex rs485_rx_byte, " ", 0]
         gosub display_write_string
 #endif
-        if rs484_rx_byte.7 then
+        if rs485_rx_byte.7 then
             ; found an opcode
-            rs484_rx_opcode = rs484_rx_byte
-            rs484_rx_checksum = rs484_rx_byte
-            if rs484_rx_byte.6 then
-                if rs484_rx_byte.5 then
+            rs485_rx_opcode = rs485_rx_byte
+            rs485_rx_checksum = rs485_rx_byte
+            if rs485_rx_byte.6 then
+                if rs485_rx_byte.5 then
                     ; next recieved byte is packet length
-                    rs484_rx_state = RX_STATE_WAITING_FOR_LENGTH
+                    rs485_rx_state = RX_STATE_WAITING_FOR_LENGTH
                 else
-                    rs484_rx_packet_length = 5
-                    rs484_rx_state = RX_STATE_ACCUMULATING_DATA
+                    rs485_rx_packet_length = 5
+                    rs485_rx_state = RX_STATE_ACCUMULATING_DATA
                 endif
             else
-                if rs484_rx_byte.5 then
-                    rs484_rx_packet_length = 3
+                if rs485_rx_byte.5 then
+                    rs485_rx_packet_length = 3
                 else
-                    rs484_rx_packet_length = 1
+                    rs485_rx_packet_length = 1
                 endif
-                rs484_rx_state = RX_STATE_ACCUMULATING_DATA
+                rs485_rx_state = RX_STATE_ACCUMULATING_DATA
             endif
-            rs484_rx_packet_index = 0
+            rs485_rx_packet_index = 0
         else
-            rs484_rx_checksum = rs484_rx_checksum ^ rs484_rx_byte
-            if rs484_rx_state = RX_STATE_ACCUMULATING_DATA then
-                rs484_rx_packet_length = rs484_rx_packet_length - 1
-                if rs484_rx_packet_length = 0 then
-                    rs484_rx_state = RX_STATE_WAITING_FOR_OPCODE
-                    if rs484_rx_checksum = $ff then
+            rs485_rx_checksum = rs485_rx_checksum ^ rs485_rx_byte
+            if rs485_rx_state = RX_STATE_ACCUMULATING_DATA then
+                rs485_rx_packet_length = rs485_rx_packet_length - 1
+                if rs485_rx_packet_length = 0 then
+                    rs485_rx_state = RX_STATE_WAITING_FOR_OPCODE
+                    if rs485_rx_checksum = $ff then
                         ; valid packet received
-                        if (rs484_rx_opcode = OPC_SW_REQ) and (rs484_rx_packet[1] & $10) then 
-;????                            loconet_switch = ((rs484_rx_packet[1] & $f) << 7) + rs484_rx_packet[0]
-;????                            switch_motor_direction = rs484_rx_packet[1] & SWITCH_MOTOR_CLOSED
-                            gosub handle_switch_request
+                        if (rs485_rx_packet[0] = rs485_address) then
+                            if (rs485_rx_opcode != OPC_ACK) then
+                                gosub rs485_send_ACK
+                            endif
+                            if (rs485_rx_opcode = OPC_SW_REQ) then
+                                if (rs485_rx_packet[2] & $10) then 
+;????                                    loconet_switch = ((rs485_rx_packet[2] & $f) << 7) + rs485_rx_packet[1]
+;????                                    switch_motor_direction = rs485_rx_packet[2] & SWITCH_MOTOR_CLOSED
+;????                                    gosub handle_switch_request
+                                endif
+                            elseif (rs485_rx_opcode = OPC_ACK) then
+;????is the sequence number correct
+;????cancel retries
+                            endif
                         endif
                     endif
                 else
-                    if rs484_rx_packet_index < RS485_RX_PACKET_LEN then
-                        rs484_rx_packet[rs484_rx_packet_index] = rs484_rx_byte
-                        rs484_rx_packet_index = rs484_rx_packet_index + 1
+                    if rs485_rx_packet_index < RS485_RX_PACKET_LEN then
+                        rs485_rx_packet[rs485_rx_packet_index] = rs485_rx_byte
+                        rs485_rx_packet_index = rs485_rx_packet_index + 1
                     endif
                 endif
-            elseif rs484_rx_state = RX_STATE_WAITING_FOR_LENGTH then
-                rs484_rx_packet_length = rs484_rx_byte
-                rs484_rx_state = RX_STATE_ACCUMULATING_DATA
+            elseif rs485_rx_state = RX_STATE_WAITING_FOR_LENGTH then
+                rs485_rx_packet_length = rs485_rx_byte
+                rs485_rx_state = RX_STATE_ACCUMULATING_DATA
             endif
         endif
         rs485_rx_head = rs485_rx_head + 1
@@ -134,7 +154,8 @@ rs484_receive:
 
 ;=============================================================================
 rs485_initialize:
-    rs484_rx_state = RX_STATE_WAITING_FOR_OPCODE
+    rs485_address = 0 ;????
+    rs485_rx_state = RX_STATE_WAITING_FOR_OPCODE
 ;????    loconet_switch = $ffff
     return
 

@@ -29,6 +29,11 @@ mainloop:
     gosub loconet_receive
 #endif
 
+#ifdef DO_RS485
+    ; check to see if any RS485 data has been received
+    gosub rs485_receive
+#endif
+
     InterruptState var byte
     GLOBAL_INTERRUPT_ENABLE = 0
     InterruptState = TimerTickInterrupt
