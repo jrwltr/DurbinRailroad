@@ -28,6 +28,13 @@ onboard_switch_check:
     OBB_previous_value = OBB_value
 
     if OBB_debounce = $7f then
+#ifdef DISPLAY_SWITCH_CHANGE
+    DisplayRow = 1
+    DisplayCol = DISPLAY_COLUMNS-2
+    gosub display_set_cursor
+    ARRAYWRITE DisplayString, [hex OBB_value, " ", 0]
+    gosub display_write_string
+#endif
         ; we saw a change in the switches followed by 7 timer interrupts
         ; with no change
         OBB_debounce = OBB_value ^ OBB_last_debounced
@@ -67,9 +74,9 @@ onboard_switch_check:
         if (OBB_debounce & $10) then
             display_update_needed = 1
             if OBB_value & $10 then
-                gosub operate_switch_on
-            else
                 gosub operate_switch_off
+            else
+                gosub operate_switch_on
             endif
         endif
         OBB_debounce = $7f  ; done with OBB_debounce as a temporary variable

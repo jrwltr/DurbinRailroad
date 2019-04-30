@@ -1,14 +1,19 @@
 ;=============================================================================
-; I2C interface to a 4 row by 20 column display module.  A PCF8574 I2Ci-to-
-; parralel connects the processor to the LCD module.  The low 4 bits of I2C
-; data connect to the control signals of the LCD module (RS, RW, E, BKLT).
-; The high 4 bits of I2C data connect to the data lines of the LCD module.
-; This forces us to use 4 bit accesses to program the display.  The first
-; few commands use 8 bit accesses until the display can be set to 4 bit.
+; I2C interface to a display module.  A PCF8574 I2Ci-to-parralel connects
+; the processor to the LCD module.  The low 4 bits of I2C data connect to 
+; the control signals of the LCD module (RS, RW, E, BKLT).  The high 4 bits
+; of I2C data connect to the data lines of the LCD module.  This forces us 
+; to use 4 bit accesses to program the display.  The first few commands use
+; 8 bit accesses until the display can be set to 4 bit.
 ;=============================================================================
 
+#ifdef DO_DEVELOPMENT_BOARD
 DISPLAY_ROWS    con 4
 DISPLAY_COLUMNS con 20
+#else
+DISPLAY_ROWS    con 2
+DISPLAY_COLUMNS con 16
+#endif
 
 ;=============================================================================
 ; Display Commands
@@ -98,6 +103,7 @@ display_clear_to_end_of_line:
     ARRAYWRITE DisplayString, [REP " "\(DISPLAY_COLUMNS-DisplayCol), 0]
 display_write_string:
     for i = 0 to DISPLAY_COLUMNS-1
+        if (DisplayRow >= DISPLAY_ROWS) or (DisplayCol >= DISPLAY_COLUMNS) then exit
         DisplayData = DisplayString[i]
         if DisplayData = 0 then exit ; break out of loop on null terminator
         dspstr[0]= (DisplayData & $f0)|DISPLAY_BKLT|DISPLAY_RS
@@ -129,9 +135,13 @@ display_set_cursor:
 
 ;=============================================================================
 display_initialize:
+
+    ;display_row_address contains the address in display memory where each row starts
+#ifdef DO_DEVELOPMENT_BOARD
     ARRAYWRITE display_row_address, [ $0, $40, $14, $54 ]
-        ;display_row_address contains the address in display memory
-        ;where each row starts
+#else
+    ARRAYWRITE display_row_address, [ $0, $40 ]
+#endif
 
     ; Set I2C Display Port outputs to zero
     I2CWRITE DISPLAY_I2C_DATA,DISPLAY_I2C_CLK,DISPLAY_I2C_ADDRESS,[$00]

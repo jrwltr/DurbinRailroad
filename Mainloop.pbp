@@ -4,9 +4,9 @@
 
 #ifdef DO_OPERATE_PROGRAM
 if OperateProgramSwitch then
-    operate_mode = MODE_OPERATE
-else
     operate_mode = MODE_PROGRAM
+else
+    operate_mode = MODE_OPERATE
 endif
 #endif
 

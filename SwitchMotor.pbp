@@ -115,18 +115,13 @@ switch_motor_write_from_eeprom:
                 i2c_write_value = $fe
             endif
         endif
-#ifdef DO_DEVELOPMENT_BOARD
         if interface_index = 0 then
             I2CWRITE SW0_INTERFACE_I2C_DATA, SW0_INTERFACE_I2C_CLK, i2c_addr, [ i2c_write_value ], i2c_write_error
-        endif
-#else
-        if interface_index = 0 then
-            I2CWRITE SW0_INTERFACE_I2C_DATA, SW0_INTERFACE_I2C_CLK, i2c_addr, [ i2c_write_value ], i2c_write_error
+#ifndef DO_DEVELOPMENT_BOARD
         elseif interface_index = 1 then
             I2CWRITE SW1_INTERFACE_I2C_DATA, SW1_INTERFACE_I2C_CLK, i2c_addr, [ i2c_write_value ], i2c_write_error
-            goto i2c_write_error
-        endif
 #endif
+        endif
         pause 10
 i2c_write_error:
         return
@@ -232,18 +227,13 @@ switch_motor_button_check:
             ; for each PCF8574 with buttons attached...
             for bank_index = 0 to BANKS_PER_INTERFACE-1
                 i2c_addr = PCF8574A_I2C_ADDRESS + (bank_index << 1)
-#ifdef DO_DEVELOPMENT_BOARD
                 if interface_index = 0 then
                     I2CREAD SW0_INTERFACE_I2C_DATA, SW0_INTERFACE_I2C_CLK, i2c_addr, [ i2c_read_value ], i2c_read_error
-                endif
-#else
-                if interface_index = 0 then
-                    I2CREAD SW0_INTERFACE_I2C_DATA, SW0_INTERFACE_I2C_CLK, i2c_addr, [ i2c_read_value ], i2c_read_error
+#ifndef DO_DEVELOPMENT_BOARD
                 elseif interface_index = 1 then
                     I2CREAD SW1_INTERFACE_I2C_DATA, SW1_INTERFACE_I2C_CLK, i2c_addr, [ i2c_read_value ], i2c_read_error
-                    goto i2c_read_error
-                endif
 #endif
+                endif
                 i2c_read_value = ~i2c_read_value
                 for switch_index = 0 to SWITCH_MOTORS_PER_BANK-1
                     sm  var byte
