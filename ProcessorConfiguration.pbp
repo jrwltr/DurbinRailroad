@@ -83,12 +83,20 @@ ANSELC = %00000000
 TRISA  = %10001111    'Set PORTA bits 0, 1, 2, 3, 7 as inputs, the rest as outputs
 TRISB  = %01100000    'Set PORTB bits 5, 6 as inputs, the rest as outputs
 TRISC  = %10100011    'Set PORTC bits 0, 1, 5, 7 as inputs, the rest as outputs
-#else
-TRISA  = %00000000    'Set PORTA all bits as outputs
-TRISB  = %00001111    'Set PORTB bits 0, 1, 2, 3 as inputs, the rest as outputs
-TRISC  = %10110001    'Set PORTC bits 0, 1, 5, 7 as inputs, the rest as outputs
-#endif
 WPUA   = %10001111    'Set weak pullups on PORTA bits 0, 1, 2, 3 and 7, the rest as outputs
+#else
+TRISA  = %00100100    'Set PORTA bits 2, 5 as inputs, the rest as outputs
+TRISB  = %00001111    'Set PORTB bits 0, 1, 2, 3 as inputs, the rest as outputs
+TRISC  = %10110001    'Set PORTC bits 0, 4, 5, 7 as inputs, the rest as outputs
+WPUA   = %00100100    'Set weak pullups on PORTA bits 2, 5, the rest as outputs
+#endif
+
+#if __PROCESSOR__ = "16F19156"
+RB1PPS = $09    ; pin select RB1 is RB1
+RB2PPS = $0a    ; pin select RB2 is RB2
+RB3PPS = $0b    ; pin select RB3 is RB3
+RC4PPS = $14    ; pin select RC4 is RC4
+#endif
 
 ;=============================================================================
 #ifdef DO_DEVELOPMENT_BOARD
@@ -108,10 +116,10 @@ WPUA   = %10001111    'Set weak pullups on PORTA bits 0, 1, 2, 3 and 7, the rest
     SDA2     var PORTC.1
 #endif
 #ifdef DO_SWITCH_CONTROLLER
-    SCL1     var PORTA.0
-    SDA1     var PORTA.1
-    SCL2     var PORTA.3
-    SDA2     var PORTA.4
+    SDA1     var PORTA.0
+    SCL1     var PORTA.1
+    SDA2     var PORTA.3
+    SCL2     var PORTA.4
     SCL3     var PORTB.4
     SDA3     var PORTB.5
 #endif
@@ -252,11 +260,6 @@ RXPPS = $17     ; pin select RX is RC7
 #endif
 #if __PROCESSOR__ = "16F19156"
 RX1PPS = $17    ; pin select RX is RC7
-RC4PPS = $14    ; pin select RC4 is RC4
-RB0PPS = $08    ; pin select RB0 is RB0
-RB1PPS = $09    ; pin select RB1 is RB1
-RB2PPS = $0a    ; pin select RB2 is RB2
-RB3PPS = $0b    ; pin select RB3 is RB3
 #endif
 RC6PPS = $10    ; pin select TX is RC6 as output
 TX1STA = $20    ; TX9 = 0, TXEN = 1, SYNC = 0, BRGH = 0
