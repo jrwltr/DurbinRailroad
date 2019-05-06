@@ -253,6 +253,7 @@ switch_motor_button_check:
                             led_to_change = LED_SWITCHMOTOR_BUTTON
                             gosub led_flash
 #endif
+                            switch_motor = sm
 #ifdef DO_OPERATE_PROGRAM
                             if operate_mode == MODE_OPERATE then
                                 switch_motor_direction = SWITCH_MOTOR_TOGGLE
@@ -272,7 +273,6 @@ switch_motor_button_check:
 #endif
 #ifdef DO_SWITCH_CONTROLLER
 #ifdef DO_LOCONET
-                            switch_motor = sm
                             ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS + (sm * 2)
                             gosub eeprom_read_word
                             loconet_switch = ee_word
