@@ -22,6 +22,30 @@ switch_motor_direction  var byte
     SWITCH_MOTOR_CLOSED con $20 ;this corresponds to the bit in the OPC_SW_REQ command
     SWITCH_MOTOR_TOGGLE con $80
 
+#ifdef TEST_TRANSMIT
+;=============================================================================
+;sample transmit code that we don't use at this time...
+
+LOCONET_MAX_TX_COUNT    con 5
+
+loconet_wait_tx_empty:
+    while PIR3.4 = 0 ; while PIR3.TXIF = 0  wait for TX1REG empty
+    wend
+    return
+
+loconet_transmit:
+    gosub loconet_wait_tx_empty
+    TX1REG = $55
+    gosub loconet_wait_tx_empty
+    TX1REG = $aa
+    gosub loconet_wait_tx_empty
+    TX1REG = $cc
+    gosub loconet_wait_tx_empty
+    TX1REG = $33
+    return
+
+#endif
+
 ;=============================================================================
 ; loconet_receive: receive state machine for Loconet packets, called after 
 ;   the interrupt routine detects received data
@@ -29,11 +53,10 @@ switch_motor_direction  var byte
 loconet_receive:
     while rx_head != rx_tail 
         rx_byte = rx_data_fifo[rx_head]
+#define SHOW_RX_DATA
 #ifdef SHOW_RX_DATA
-        SRD_Row var byte
-        SRD_Col var byte
-        if (DisplayRow != 3) or (DisplayCol >= DISPLAY_COLUMNS-3) then
-            DisplayRow = 3
+        if (DisplayRow != DISPLAY_ROWS-1) or (DisplayCol >= DISPLAY_COLUMNS-3) then
+            DisplayRow = DISPLAY_ROWS-1
             DisplayCol = 0
             gosub display_set_cursor
         endif

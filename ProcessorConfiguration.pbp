@@ -17,7 +17,7 @@ endasm
 ;=============================================================================
 #if __PROCESSOR__ = "16F19156"
 #CONFIG
-    __config _CONFIG1, _FEXTOSC_OFF & _RSTOSC_HFINTPLL & _CLKOUTEN_OFF & _VBATEN_OFF & _LCDPEN_OFF & _CSWEN_ON & _FCMEN_ON
+    __config _CONFIG1, _FEXTOSC_OFF & _RSTOSC_HFINT32 & _CLKOUTEN_OFF & _VBATEN_OFF & _LCDPEN_OFF & _CSWEN_ON & _FCMEN_ON
     __config _CONFIG2, _MCLRE_ON & _PWRTE_PWRT_64 & _LPBOREN_OFF & _BOREN_SBOREN & _BORV_LO & _ZCD_OFF & _PPS1WAY_OFF & _STVREN_ON
     __config _CONFIG3, _WDTCPS_WDTCPS_31 & _WDTE_SWDTEN & _WDTCWS_WDTCWS_7 & _WDTCCS_LFINTOSC
     __config _CONFIG4, _BBSIZE_512 & _BBEN_OFF & _SAFEN_OFF & _WRTAPP_OFF & _WRTB_OFF & _WRTC_OFF & _WRTD_OFF & _WRTSAF_OFF & _LVP_OFF
@@ -74,7 +74,7 @@ ANSEL  = %00000000    'Set all pins for digital operation
 ANSELH = %00000000
 OSCCON = %01110000    'Internal Osc set to 16MHz, clock determined by Config FOSC bits
 #else
-OSCCON1 = %00110000   'Internal Osc set to 16MHz, clock determined by Config FOSC bits
+OSCCON1 = %00000000   'Internal Osc set to 32MHz, clock determined by Config FOSC bits
 ANSELA = %00000000    'Set all pins for digital operation
 ANSELB = %00000000
 ANSELC = %00000000
@@ -257,11 +257,12 @@ RCSTA.4 = 1     ; CREN = 1       enable the serial port receiver
 #else
 #if __PROCESSOR__ = "16F18856"
 RXPPS = $17     ; pin select RX is RC7
+RC6PPS = $10    ; pin select TX is RC6 as output
 #endif
 #if __PROCESSOR__ = "16F19156"
 RX1PPS = $17    ; pin select RX is RC7
+RC6PPS = $0d    ; pin select TX is RC6 as output
 #endif
-RC6PPS = $10    ; pin select TX is RC6 as output
 TX1STA = $20    ; TX9 = 0, TXEN = 1, SYNC = 0, BRGH = 0
 BAUD1CON = $10  ; SCKP = 1, BRG16 = 0   
     ;SCKP = 1 inverts transmit for loopback testing
