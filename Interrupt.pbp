@@ -67,6 +67,11 @@ ttt1:                                       ; endif
 ttt2:                                       ; endif
     endm
 ENDASM
+#else
+ASM
+CheckTurntableTimer  macro
+    endm
+ENDASM
 #endif
 
 ;=============================================================================
@@ -96,6 +101,12 @@ ENDASM
 ;=============================================================================
 ASM
 CheckReceiveInterrupt   macro PIR, RC_IF, RC_STA, RC_REG, data_fifo, rx_head, rx_tail
+    local rcv1
+    local rcv2
+    local rcv3
+    local rcv4
+    local rcv5
+    local rcv6
 rcv1:                                       ;
     banksel PIR                             ;
     btfss   PIR,RC_IF                       ;
@@ -138,7 +149,7 @@ rcv4:                                       ;         else
     sublw   _RXFIFO_SIZE                    ;
     btfss   STATUS, 2                       ;             if rx_tail == RXFIFO_SIZE
     bra     rcv5                            ;
-    clrw                                    ;
+    movlw   0                               ;
     movwf   rx_tail                         ;                 rx_tail = 0
 rcv5:                                       ;             endif
     banksel RC_REG                          ;
@@ -153,34 +164,64 @@ rcv6:                                       ; endwhile
 ENDASM
 
 ;=============================================================================
+#ifdef DO_LOCONET
+#if __PROCESSOR__ = "18F13K22"
+ASM
+CheckLoconetReceiveInterrupt macro
+    ;we don't do loconet on this processor (switch extension)
+    endm
+ENDASM
+#else
+ASM
+CheckLoconetReceiveInterrupt macro
+    CheckReceiveInterrupt   PIR3, 5, RC1STA, RC1REG, rx_data_fifo,      rx_head,        rx_tail
+    endm
+ENDASM
+#endif
+#else
+ASM
+CheckLoconetReceiveInterrupt macro
+    endm
+ENDASM
+#endif
+
+;=============================================================================
+#ifdef DO_RS485
+#if __PROCESSOR__ = "18F13K22"
+ASM
+CheckRS485ReceiveInterrupt macro
+    CheckReceiveInterrupt   PIR1, 5, RCSTA,  RCREG,  rs485_rx_data_fifo, rs485_rx_head, rs485_rx_tail
+    endm
+ENDASM
+#else
+ASM
+CheckRS485ReceiveInterrupt macro
+    CheckReceiveInterrupt   PIR3, 7, RC2STA, RC2REG, rs485_rx_data_fifo, rs485_rx_head, rs485_rx_tail
+    endm
+ENDASM
+#endif
+#else
+ASM
+CheckRS485ReceiveInterrupt macro
+    endm
+ENDASM
+#endif
+
+;=============================================================================
 define INTHAND  isr
 
 ASM
 isr:
     InterruptEntry
-;following lines toggle PORTC.3 on every interrupt
+;following debug lines toggle PORTC.3 on every interrupt
 ;    banksel LATC
 ;    movlw   8
 ;    xorwf   LATC, 1
-#ifdef DO_LOCONET
-#if __PROCESSOR__ = "18F13K22"
-;we don't do loconet on this processor (switch extension)
-#else
-    CheckReceiveInterrupt   PIR3, 5, RC1STA, RC1REG, rx_data_fifo,      rx_head,        rx_tail
-#endif
-#endif
-#ifdef DO_RS485
-#if __PROCESSOR__ = "18F13K22"
-    CheckReceiveInterrupt   PIR1, 5, RCSTA,  RCREG,  rs485_rx_data_fifo, rs485_rx_head, rs485_rx_tail
-#else
-    CheckReceiveInterrupt   PIR3, 7, RC2STA, RC2REG, rs485_rx_data_fifo, rs485_rx_head, rs485_rx_tail
-#endif
-#endif
-    CheckTimerTick                          ;
-#ifdef DO_TURNTABLE
-    CheckTurntableTimer                     ;
-#endif
-    InterruptExit                           ;
+    CheckLoconetReceiveInterrupt
+    CheckRS485ReceiveInterrupt
+    CheckTimerTick
+    CheckTurntableTimer
+    InterruptExit
     retfie
 ENDASM
 
