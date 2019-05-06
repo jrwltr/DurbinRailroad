@@ -53,7 +53,6 @@ loconet_transmit:
 loconet_receive:
     while rx_head != rx_tail 
         rx_byte = rx_data_fifo[rx_head]
-#define SHOW_RX_DATA
 #ifdef SHOW_RX_DATA
         if (DisplayRow != DISPLAY_ROWS-1) or (DisplayCol >= DISPLAY_COLUMNS-3) then
             DisplayRow = DISPLAY_ROWS-1
