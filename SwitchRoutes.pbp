@@ -1,72 +1,4 @@
 ;=============================================================================
-ROUTE_STORAGE_SIZE  con 42   ; MAX_ROUTE_SWITCHES + 2
-ROUTE_TABLE_SIZE    con 2000 ; MAX_ROUTES * ROUTE_STORAGE_SIZE
-
-;=============================================================================
-route_num_routes    var byte
-
-route_eeaddr        var word
-
-;=============================================================================
-; Routes storage in eeprom...
-;   route number    word    the switch number from the Digitrax CAB
-;   switch id 1     byte    the array of n switch motor indexes...
-;   switch id 2     byte        the high bit of each switch id is used to save the switch state
-;       ...
-;   switch id MAX_ROUTE_SWITCHES     byte
-;=============================================================================
-route_read:
-    route_switch_index = $ff
-    ee_address = route_eeaddr+2
-    for route_num_switches = 0 to MAX_ROUTE_SWITCHES - 1
-        gosub eeprom_read_byte
-        if ee_byte = $ff then
-            exit
-        endif
-        route_switches[route_num_switches] = ee_byte
-        ee_address = ee_address + 1
-    next route_num_switches
-    if route_num_switches != 0 then
-        route_switch_index = 0
-    endif
-    return
-
-;=============================================================================
-route_find:
-    route_found = ROUTE_NOT_FOUND
-    for route_eeaddr = ROUTE_TABLE_EEPROM_ADDRESS to ROUTE_TABLE_EEPROM_ADDRESS + ((route_num_routes-1)*ROUTE_STORAGE_SIZE) step ROUTE_STORAGE_SIZE
-        ee_address = route_eeaddr
-        gosub eeprom_read_word
-        if ee_word = route_to_find then
-            route_found = ee_word
-            return
-        endif
-    next route_eeaddr
-    return
-
-;=============================================================================
-nxt_eeaddr      var byte
-route_delete:
-    route_to_find = route_number
-    gosub route_find
-    if route_found != ROUTE_NOT_FOUND then
-        for nxt_eeaddr = (route_eeaddr + ROUTE_STORAGE_SIZE) to ((ROUTE_TABLE_EEPROM_ADDRESS + (route_num_routes * MAX_ROUTES)) - 1)
-            ee_address = nxt_eeaddr
-            gosub eeprom_read_byte
-            ee_address = route_eeaddr
-            gosub eeprom_write_byte
-            route_eeaddr = route_eeaddr + 1
-        next nxt_eeaddr
-        ee_byte = $ff
-        for ee_address = route_eeaddr to route_eeaddr + ROUTE_STORAGE_SIZE - 1
-            gosub eeprom_write_byte
-        next ee_address
-        route_num_routes = route_num_routes - 1
-        route_number = ROUTE_NOT_FOUND
-    endif
-    return
-
-;=============================================================================
 route_delete_switch:
     if route_switch_index != $ff then
         if route_num_switches = 1 then
@@ -97,13 +29,17 @@ route_activate:
     if route_num_switches != 0 then
         kk var byte
         for kk = 0 to route_num_switches - 1
-            switch_motor = route_switches[kk] & $7f
-            if route_switches[kk] & $80 then
-                switch_motor_direction = SWITCH_MOTOR_THROWN
-            else
-                switch_motor_direction = SWITCH_MOTOR_CLOSED
+            loconet_switch = route_switches[kk] & $7fff
+            gosub switch_eeprom_find_translation
+            if !switch_not_defined then
+                if route_switches[kk] & $8000 then
+                    switch_motor_state = SWITCH_MOTOR_THROWN
+                else
+                    switch_motor_state = SWITCH_MOTOR_CLOSED
+                endif
+                gosub switch_eeprom_write_switch_state
+                gosub switch_bank_write
             endif
-            gosub switch_motor_write
         next kk
     endif
     return
@@ -112,10 +48,7 @@ route_activate:
 route_previous_switch:
     if route_switch_index != $ff and route_switch_index != 0 then
         route_switch_index = route_switch_index - 1
-translate_route_switch:
-        ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS + (route_switches[route_switch_index] * 2)
-        gosub eeprom_read_word
-        loconet_switch = ee_word
+        loconet_switch = route_switches[route_switch_index] & $7fff
     endif
     return
 
@@ -123,44 +56,19 @@ translate_route_switch:
 route_next_switch:
     if route_switch_index != $ff and route_switch_index < route_num_switches-1 then
         route_switch_index = route_switch_index + 1
-        goto translate_route_switch
+        loconet_switch = route_switches[route_switch_index] & $7fff
     endif
     return
 
 ;=============================================================================
-route_save:
-    route_to_find = route_number
-    gosub route_find
-    if (route_found = ROUTE_NOT_FOUND) then
-        if route_num_routes = MAX_ROUTES then
-            ARRAYWRITE DisplayString, ["Too many routes", 0]
-            goto route_error
-        endif
-        route_num_routes = route_num_routes + 1
-    endif
-
-    k = 0
-    for ee_address = route_eeaddr + 2 to route_eeaddr + 2 + route_num_switches - 1
-        ee_byte = route_switches[k]
-        gosub eeprom_write_byte
-        k = k + 1
-    next ee_address 
-    if k < MAX_ROUTE_SWITCHES then
-        ee_byte = $ff
-        gosub eeprom_write_byte
-    endif
-
-    ee_address = route_eeaddr
-    ee_word = route_number
-    gosub eeprom_write_word
 route_cancel:
     loconet_switch = route_number
     route_to_find = route_number
-    gosub route_find
+    gosub route_eeprom_find
     if (route_found = ROUTE_NOT_FOUND) then
         route_number = ROUTE_NOT_FOUND
     else
-        gosub route_read
+        gosub route_eeprom_read
     endif
     return
 
@@ -171,30 +79,9 @@ route_create:
     return
 
 ;=============================================================================
-#ifdef ERASE_EEPROM
-route_erase_eeprom:
-    ee_word = $ffff
-    ee_byte = $ff
-    for ee_address = ROUTE_TABLE_EEPROM_ADDRESS to (ROUTE_TABLE_EEPROM_ADDRESS + ROUTE_TABLE_SIZE - ROUTE_STORAGE_SIZE) step ROUTE_STORAGE_SIZE
-        gosub eeprom_write_word
-        ee_address = ee_address + 2
-        gosub eeprom_write_byte
-        ee_address = ee_address - 2
-    next ee_address
-    return
-#endif
-
-;=============================================================================
 route_initialize:
-    ; count the number of routes stored in EEPROM
     route_number = ROUTE_NOT_FOUND
-    route_num_routes = 0
-    for ee_address = ROUTE_TABLE_EEPROM_ADDRESS to (ROUTE_TABLE_EEPROM_ADDRESS + ROUTE_TABLE_SIZE - ROUTE_STORAGE_SIZE) step ROUTE_STORAGE_SIZE
-        gosub eeprom_read_word
-        if (ee_word = $ffff) then exit
-        route_num_routes = route_num_routes + 1
-    next ee_address
-    return
+    goto route_eeprom_count_routes
 
 ;=============================================================================
 

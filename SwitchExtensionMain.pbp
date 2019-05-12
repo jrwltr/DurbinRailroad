@@ -16,6 +16,8 @@ INCLUDE "Interrupt.pbp"
 ;=============================================================================
 loconet_switch      var word
 switch_motor        var byte
+switch_bank         var byte
+switch_address      var byte
 
 ;=============================================================================
 INCLUDE "LED.pbp"

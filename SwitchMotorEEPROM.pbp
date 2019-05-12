@@ -1,0 +1,252 @@
+;=============================================================================
+MAX_LOCONET_SWITCHES    con 999
+
+;=============================================================================
+TRANSLATE_TABLE_EEPROM_ADDRESS      con 0
+    ; the Translate table contains MAX_LOCONET_SWITCHES entries, one for each possible Loconet
+    ; switch number.
+    ; each entry is 16 bits defined as follows
+    ;     $8000     this bit is 1 if the translation is not defined, 0 if it is defined
+    ;     $7c00     5 unused bits
+    ;     $03c0     4 bits to identify the switch controller address (0-15)
+    ;     $0038     3 bits to identify the switch bank within the controller (0-7)
+    ;     $0007     3 bits to identify the switch within the bank (0-4)
+
+SWITCH_MOTOR_STATE_EEPROM_ADDRESS   con 1998 ; TRANSLATE_TABLE_EEPROM_ADDRESS + (MAX_LOCONET_SWITCHES * 2)
+    ; the switch motor state table contains one 16 bit entry for each possible switch bank in the system
+    ; each entry is 16 bits defined as follows
+    ;     $fc00     6 unused bits
+    ;     $0300     2 bits indicating the state of switch 4 in the switch bank
+    ;     $00c0     2 bits indicating the state of switch 3 in the switch bank
+    ;     $0030     2 bits indicating the state of switch 2 in the switch bank
+    ;     $000c     2 bits indicating the state of switch 1 in the switch bank
+    ;     $0003     2 bits indicating the state of switch 0 in the switch bank
+
+ROUTE_TABLE_EEPROM_ADDRESS          con 2510 ;SWITCH_MOTOR_STATE_EEPROM_ADDRESS+(MAX_SWITCH_BANKS * 2)
+    ; Routes storage in eeprom...
+    ;   route number    word    the switch number from the Digitrax CAB
+    ;   switch id 1     word    the array of n loconet switch numbers...
+    ;   switch id 2     word        the high bit of each switch id is used to save the switch state
+    ;       ...
+    ;   switch id MAX_ROUTE_SWITCHES     word
+
+;=============================================================================
+route_num_routes    var byte
+
+;=============================================================================
+switch_eeprom_delete_translation:
+    switch_not_defined = 1
+    ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS + (loconet_switch * 2)
+    ee_word = $ffff
+    goto eeprom_write_word
+
+;=============================================================================
+switch_eeprom_find_translation:
+    ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS + (2 * loconet_switch)
+    gosub eeprom_read_word
+    switch_not_defined = (ee_word >> 15) & $1
+    switch_address     = (ee_word >>  6) & $f
+    switch_bank        = (ee_word >>  3) & $7
+    switch_motor       =  ee_word        & $7
+    return
+
+;=============================================================================
+switch_eeprom_write_translation:
+    ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS + (loconet_switch * 2)
+    ee_word = (switch_address << 6) + (switch_bank << 3) + switch_motor
+    goto eeprom_write_word
+
+;=============================================================================
+switch_eeprom_find_reverse_translation:
+    loconet_switch = $ffff
+    for ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS to ((MAX_LOCONET_SWITCHES-1) * 2)
+        gosub eeprom_read_word
+        if ee_word = (switch_address << 6) + (switch_bank << 3) + switch_motor then
+            loconet_switch = (ee_address - TRANSLATE_TABLE_EEPROM_ADDRESS) / 2
+            exit
+        endif
+    next ee_address
+    return
+
+;=============================================================================
+switch_motor_state  var byte
+
+switch_eeprom_read_bank:
+    ee_address = SWITCH_MOTOR_STATE_EEPROM_ADDRESS + (((switch_address << 3) + switch_bank) * 2)
+    gosub eeprom_read_word
+    if ee_word = $ffff then
+        ; looks like an erased eeprom, initialize all switches to closed
+        ee_word = $5555
+        gosub eeprom_write_word
+    endif
+    return
+
+switch_eeprom_read_switch_state:
+    gosub switch_eeprom_read_bank
+    if (((ee_word >> (switch_motor * 2)) & 3) = 1) then
+        switch_motor_state = SWITCH_MOTOR_CLOSED
+    else
+        switch_motor_state = SWITCH_MOTOR_THROWN
+    endif
+    return
+
+;=============================================================================
+switch_eeprom_write_switch_state:
+    gosub switch_eeprom_read_bank
+    if switch_motor_state = SWITCH_MOTOR_THROWN then
+        ee_word = (ee_word & ~(3 << (switch_motor * 2))) | (2 << (switch_motor * 2))
+    elseif switch_motor_state = SWITCH_MOTOR_CLOSED then
+        ee_word = (ee_word & ~(3 << (switch_motor * 2))) | (1 << (switch_motor * 2))
+    elseif switch_motor_state = SWITCH_MOTOR_TOGGLE then
+        ee_word =  ee_word ^  (3 << (switch_motor * 2))
+    endif
+    goto eeprom_write_word
+
+;=============================================================================
+MAX_ROUTES          con 50
+MAX_ROUTE_SWITCHES  con 40
+ROUTE_NOT_FOUND     con $ffff
+
+route_found         var word
+
+route_num_switches  var byte
+route_switch_index  var byte
+
+route_switches      var word[MAX_ROUTE_SWITCHES]
+
+route_number        var word    ; set this before calling route_activate, etc
+route_to_find       var word    ; set this before calling route_eeprom_find
+
+route_eeaddr        var word
+
+;=============================================================================
+ROUTE_STORAGE_SIZE  con 82   ; (MAX_ROUTE_SWITCHES*2) + 2
+ROUTE_TABLE_SIZE    con 4100 ; MAX_ROUTES * ROUTE_STORAGE_SIZE
+
+;=============================================================================
+route_eeprom_read:
+    route_switch_index = $ff
+    ee_address = route_eeaddr + 2
+    for route_num_switches = 0 to MAX_ROUTE_SWITCHES - 1
+        gosub eeprom_read_word
+        if ee_word = $ff then
+            exit
+        endif
+        route_switches[route_num_switches] = ee_word
+        ee_address = ee_address + 2
+    next route_num_switches
+    if route_num_switches != 0 then
+        route_switch_index = 0
+    endif
+    return
+
+;=============================================================================
+route_eeprom_count_routes:
+    ; count the number of routes stored in EEPROM
+    route_num_routes = 0
+    for ee_address = ROUTE_TABLE_EEPROM_ADDRESS to (ROUTE_TABLE_EEPROM_ADDRESS + ROUTE_TABLE_SIZE - ROUTE_STORAGE_SIZE) step ROUTE_STORAGE_SIZE
+        gosub eeprom_read_word
+        if (ee_word = $ffff) then exit
+        route_num_routes = route_num_routes + 1
+    next ee_address
+    return
+
+;=============================================================================
+route_eeprom_find:
+    route_found = ROUTE_NOT_FOUND
+    for route_eeaddr = ROUTE_TABLE_EEPROM_ADDRESS to ROUTE_TABLE_EEPROM_ADDRESS + ((route_num_routes-1)*ROUTE_STORAGE_SIZE) step ROUTE_STORAGE_SIZE
+        ee_address = route_eeaddr
+        gosub eeprom_read_word
+        if ee_word = route_to_find then
+            route_found = ee_word
+            return
+        endif
+    next route_eeaddr
+    return
+
+;=============================================================================
+nxt_eeaddr      var byte
+route_eeprom_delete:
+    route_to_find = route_number
+    gosub route_eeprom_find
+    if route_found != ROUTE_NOT_FOUND then
+        for nxt_eeaddr = (route_eeaddr + ROUTE_STORAGE_SIZE) to ((ROUTE_TABLE_EEPROM_ADDRESS + (route_num_routes * MAX_ROUTES)) - 1)
+            ee_address = nxt_eeaddr
+            gosub eeprom_read_byte
+            ee_address = route_eeaddr
+            gosub eeprom_write_byte
+            route_eeaddr = route_eeaddr + 1
+        next nxt_eeaddr
+        ee_byte = $ff
+        for ee_address = route_eeaddr to route_eeaddr + ROUTE_STORAGE_SIZE - 1
+            gosub eeprom_write_byte
+        next ee_address
+        route_num_routes = route_num_routes - 1
+        route_number = ROUTE_NOT_FOUND
+    endif
+    return
+
+;=============================================================================
+route_eeprom_save:
+    route_to_find = route_number
+    gosub route_eeprom_find
+    if (route_found = ROUTE_NOT_FOUND) then
+        if route_num_routes = MAX_ROUTES then
+            ARRAYWRITE DisplayString, ["Too many routes", 0]
+            goto route_error
+        endif
+        route_num_routes = route_num_routes + 1
+    endif
+
+    jj  var byte
+    jj = 0
+    for ee_address = route_eeaddr + 2 to route_eeaddr + 2 + ((route_num_switches - 1) * 2) step 2
+        ee_word = route_switches[jj]
+        gosub eeprom_write_word
+        jj = jj + 1
+    next ee_address 
+    if jj < MAX_ROUTE_SWITCHES then
+        ee_word = $ffff
+        gosub eeprom_write_word
+    endif
+
+    ee_address = route_eeaddr
+    ee_word = route_number
+    gosub eeprom_write_word
+    goto route_cancel
+
+;=============================================================================
+#ifdef ERASE_EEPROM
+switch_eeprom_erase:
+
+#ifdef DO_DISPLAY
+    gosub display_clear
+    DisplayRow = 0
+    DisplayCol = 0
+    gosub display_set_cursor
+    ARRAYWRITE DisplayString, ["Erasing EEPROM", 0]
+    gosub display_write_string
+    display_update_needed = 1
+#endif
+
+    ee_word = $ffff
+    for ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS to (SWITCH_MOTOR_STATE_EEPROM_ADDRESS-2) step 2
+        gosub eeprom_write_word
+    next ee_address
+
+    for ee_address = SWITCH_MOTOR_STATE_EEPROM_ADDRESS to (ROUTE_TABLE_EEPROM_ADDRESS-2) step 2
+        gosub eeprom_write_word
+    next ee_address
+
+    ee_word = $ffff
+    for ee_address = ROUTE_TABLE_EEPROM_ADDRESS to (ROUTE_TABLE_EEPROM_ADDRESS + ROUTE_TABLE_SIZE - ROUTE_STORAGE_SIZE) step ROUTE_STORAGE_SIZE
+        gosub eeprom_write_word
+        ee_address = ee_address + 2
+        gosub eeprom_write_word
+        ee_address = ee_address - 2
+    next ee_address
+    return
+#endif
+
+;=============================================================================
+

@@ -7,6 +7,8 @@
 #define DO_EEPROM
 #define DO_SWITCH_CONTROLLER
 
+#define ERASE_EEPROM
+
 ;=============================================================================
 
 CLEAR       ; zero all variables
@@ -25,7 +27,11 @@ operate_mode        var byte
 
 ;=============================================================================
 loconet_switch      var word
-switch_motor    var byte
+switch_motor        var word
+switch_bank         var word
+switch_address      var word
+    LOCAL_ADDRESS   con $f
+switch_not_defined  var bit[1]
 
 display_update_needed  var bit
 
@@ -41,6 +47,7 @@ INCLUDE "LOCONET.pbp"
 #ifdef DO_RS485
 INCLUDE "RS485.pbp"
 #endif
+INCLUDE "SwitchMotorEEPROM.pbp"
 INCLUDE "SwitchMotor.pbp"
 INCLUDE "SwitchRoutes.pbp"
 
@@ -60,23 +67,23 @@ update_display:
 
         if route_number == ROUTE_NOT_FOUND then
             if operate_mode = MODE_OPERATE then
-                if switch_motor != $ff then
-                    gosub switch_motor_read
+                if switch_not_defined then
+                    ARRAYWRITE DisplayString, ["=?", 0]
+                else
+                    gosub switch_eeprom_read_switch_state
                     if switch_motor_state = SWITCH_MOTOR_THROWN then
                         ARRAYWRITE DisplayString, ["=T", 0]
                     else
                         ARRAYWRITE DisplayString, ["=C", 0]
                     endif
-                else
-                    ARRAYWRITE DisplayString, ["=?", 0]
                 endif
                 gosub display_write_string
             elseif operate_mode = MODE_PROGRAM then
-                if switch_motor != $ff then
-                    ARRAYWRITE DisplayString, [ ">", dec switch_motor+1, 0]
-                else
+                if switch_not_defined then
                     ; no translation found
                     ARRAYWRITE DisplayString, [">???", 0]
+                else
+                    ARRAYWRITE DisplayString, [ ">", dec switch_address, ".", dec switch_bank, ".", dec switch_motor, 0]
                 endif
                 gosub display_write_string
             endif
@@ -95,15 +102,13 @@ update_display:
         endif
         gosub display_clear_to_end_of_line
     else
+        ; route edit mode
         if route_num_switches = 0 then
             ARRAYWRITE DisplayString, ["???=?", 0]
         else
-            ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS + ((route_switches[route_switch_index] & $7f) * 2)
-            gosub eeprom_read_word
-            ARRAYWRITE DisplayString, [dec ee_word+1, 0]
+            ARRAYWRITE DisplayString, [(route_switches[route_switch_index] & $7fff)+1, 0]
             gosub display_write_string
-
-            if route_switches[route_switch_index] & $80 then
+            if route_switches[route_switch_index] & $8000 then
                 ARRAYWRITE DisplayString, ["=T", 0]
             else
                 ARRAYWRITE DisplayString, ["=C", 0]
@@ -163,8 +168,7 @@ button_1_pressed:
         goto route_up_key
 #ifdef ERASE_EEPROM
     elseif operate_mode = MODE_OPERATE then
-        gosub switch_motor_erase_eeprom
-        gosub route_erase_eeprom
+        gosub switch_eeprom_erase
 #endif
     endif
     return
@@ -219,23 +223,21 @@ program_delete_key:
     if loconet_switch = $ffff then return
     if route_number != ROUTE_NOT_FOUND then
         route_number = loconet_switch
-        gosub route_delete
+        gosub route_eeprom_delete
     else
-        if (switch_motor = $ff) then return
-        gosub switch_motor_map_delete
-        switch_motor = $ff
+        if (switch_not_defined) then return
+        gosub switch_eeprom_delete_translation 
     endif
     return
 
-program_route_key
+program_route_key:
     if (loconet_switch = $ffff) then return
-    if (switch_motor = $ff) then
-        gosub switch_motor_map_delete
-        switch_motor = $ff
+    if (!switch_not_defined) then
+        gosub switch_eeprom_delete_translation 
     endif
     operate_mode = MODE_ROUTE_EDIT
     route_number = loconet_switch
-    goto route_read
+    goto route_eeprom_read
 
 ;=============================================================================
 route_up_key:
@@ -246,7 +248,7 @@ route_down_key:
 
 route_enter_key:
     operate_mode = MODE_PROGRAM
-    goto route_save
+    goto route_eeprom_save
 
 route_no_key:
     goto route_delete_switch

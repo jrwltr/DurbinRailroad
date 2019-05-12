@@ -36,7 +36,7 @@ eeprom_write_byte:
 ;
 eeprom_read_word:
     I2CWRITE EEPROM_I2C_DATA, EEPROM_I2C_CLK, EEPROM_I2C_ADDRESS, [ ee_address.byte1, ee_address.byte0 ]
-    I2CREAD EEPROM_I2C_DATA, EEPROM_I2C_CLK, EEPROM_I2C_ADDRESS, [ ee_word.byte1, ee_word.byte0 ]
+    I2CREAD  EEPROM_I2C_DATA, EEPROM_I2C_CLK, EEPROM_I2C_ADDRESS, [ ee_word.byte1, ee_word.byte0 ]
     return
 
 ;=============================================================================

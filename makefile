@@ -27,14 +27,16 @@ TURNTABLE_SOURCE		=	TurntableMain.pbp \
 							OnboardSwitches.pbp \
 							LOCONET.pbp \
 
-SWITCH_SOURCE 			=	SwitchMain.pbp \
+SWITCH_SOURCE 			=	SwitchMainCommon.pbp \
 							SwitchMotor.pbp \
 							SwitchRoutes.pbp \
+							SwitchMotorEEPROM.pbp \
 							LCD4X20.pbp \
 							EEPROM.pbp \
 							OnboardSwitches.pbp \
-							LOCONET.pbp \
-							RS485.pbp
+							RS485.pbp \
+							LOCONET.pbp
+
 
 SWITCH_EXTENSION_SOURCE =	SwitchExtensionMain.pbp \
 							SwitchMotor.pbp \
@@ -44,12 +46,13 @@ SWITCH_EXTENSION_SOURCE =	SwitchExtensionMain.pbp \
 TurntableMainDev.hex					: TurntableMainDev.pbp
 TurntableMainDev.hex TurntableMain.hex	: $(TURNTABLE_SOURCE) $(COMMON_SOURCE)
 
+SwitchMain.hex							: SwitchMain.pbp
 SwitchMainDev.hex						: SwitchMainDev.pbp
 SwitchMainDev.hex SwitchMain.hex		: $(SWITCH_SOURCE) $(COMMON_SOURCE)
 
 SwitchExtensionMain.hex					: $(SWITCH_EXTENSION_SOURCE) $(COMMON_SOURCE)
 
-TurntableMainDev.hex SwitchMainDev.hex SwitchExtensionMain.hex:	LED.pbp
+TurntableMainDev.hex SwitchMainDev.hex SwitchExtensionMain.hex: LED.pbp
 
 ##############################################################################
 $(HEXTARGETS):
