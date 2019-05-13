@@ -38,10 +38,26 @@ switch_bank_write:
         if (switch_bank / BANKS_PER_INTERFACE) = 0 then
             bval = ee_word & $ff
             i2c_addr = i2c_addr + PCF8574_I2C_ADDRESS 
+#ifdef DO_DEBUG_SWITCH_MOTOR
+            if (switch_bank = 0) then
+                DisplayRow = 1
+                DisplayCol = 0
+                gosub display_set_cursor
+                ARRAYWRITE DisplayString, [hex i2c_addr, " ", hex bval, " ", 0]
+                gosub display_write_string
+            endif
+#endif
             I2CWRITE SW0_INTERFACE_I2C_DATA, SW0_INTERFACE_I2C_CLK, i2c_addr, [ bval ], i2c_write_error
             pause 10
             bval = ((ee_word >> 8) & $3) | $fc
             i2c_addr = i2c_addr - PCF8574_I2C_ADDRESS + PCF8574A_I2C_ADDRESS 
+#ifdef DO_DEBUG_SWITCH_MOTOR
+            if (switch_bank = 0) then
+                ARRAYWRITE DisplayString, [hex i2c_addr, " ", hex bval, 0]
+                gosub display_write_string
+                gosub display_clear_to_end_of_line
+            endif
+#endif
             I2CWRITE SW0_INTERFACE_I2C_DATA, SW0_INTERFACE_I2C_CLK, i2c_addr, [ bval ], i2c_write_error
             pause 10
 #ifndef DO_DEVELOPMENT_BOARD
@@ -109,7 +125,7 @@ handle_switch_request:
             endif
         endif
     else
-        if (!switch_not_defined) then
+        if (switch_not_defined) then
             route_to_find = loconet_switch
             gosub route_eeprom_find
             if route_found != ROUTE_NOT_FOUND then
@@ -231,6 +247,7 @@ i2c_read_error:
 ;=============================================================================
 switch_motor_initialize:
 #ifdef DO_SWITCH_CONTROLLER
+    my_address = LOCAL_ADDRESS
 
     ;write all the switch motor controls to match the values read from eeprom
     for switch_address = 0 to NUMBER_EXTENSION_PROCESSORS - 1
@@ -241,7 +258,6 @@ switch_motor_initialize:
 
     gosub route_initialize
     switch_not_defined = 1
-    my_address = LOCAL_ADDRESS
 #else
     ;????read and assign my_address from address switches
 #endif
