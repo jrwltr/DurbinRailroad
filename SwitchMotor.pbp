@@ -172,7 +172,7 @@ switch_motor_button_check:
 #endif
         endif
         interface_debounce[interface_index] = debounce
-        if debounce = $7f then
+        if debounce = $3f then
             ; for each PCF8574 with buttons attached...
             for bank_index = 0 to BANKS_PER_INTERFACE-1
                 i2c_addr = PCF8574A_I2C_ADDRESS + (bank_index << 1)
