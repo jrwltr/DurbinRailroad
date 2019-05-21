@@ -2,6 +2,7 @@
 #define DO_SWITCH_EXTENSION
 #define DO_RS485
 #define DO_LED
+#define DO_DISPLAY
 
 ;=============================================================================
 
@@ -19,14 +20,46 @@ switch_motor        var byte
 switch_bank         var byte
 switch_address      var byte
 
+#ifdef DO_DISPLAY
+display_update_needed  var bit
+#endif
+
 ;=============================================================================
 INCLUDE "LED.pbp"
+#ifdef DO_DISPLAY
+INCLUDE "LCD4X20.pbp"
+#endif
 INCLUDE "LOCONET.inc"
 INCLUDE "RS485.pbp"
 INCLUDE "SwitchMotor.pbp"
 
 ;=============================================================================
+update_display:
+    DisplayRow = 0
+    DisplayCol = 0
+    gosub display_set_cursor
+
+    if loconet_switch != $ffff then
+        ARRAYWRITE DisplayString, [dec loconet_switch+1, 0]
+    else
+        ARRAYWRITE DisplayString, ["???", 0]
+    endif
+    gosub display_write_string
+
+;    if switch_motor_state = SWITCH_MOTOR_THROWN then
+;        ARRAYWRITE DisplayString, ["=T", 0]
+;    else
+;        ARRAYWRITE DisplayString, ["=C", 0]
+;    endif
+;    gosub display_write_string
+    gosub display_clear_to_end_of_line
+    return
+
+;=============================================================================
 init:
+#ifdef DO_DISPLAY
+gosub display_initialize
+#endif
 gosub led_initialize
 gosub rs485_initialize 
 gosub switch_motor_initialize
