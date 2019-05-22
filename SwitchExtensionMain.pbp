@@ -38,23 +38,12 @@ update_display:
     DisplayRow = 0
     DisplayCol = 0
     gosub display_set_cursor
-
-    ARRAYWRITE DisplayString, [hex my_address, " ", 0]
+    ARRAYWRITE DisplayString, [hex my_address, " ", 0 ]
     gosub display_write_string
-
-    if loconet_switch != $ffff then
-        ARRAYWRITE DisplayString, [dec loconet_switch+1, 0]
-    else
-        ARRAYWRITE DisplayString, ["???", 0]
-    endif
+    ARRAYWRITE DisplayString, [dec switch_bank, " ", 0 ]
     gosub display_write_string
-
-;    if switch_motor_state = SWITCH_MOTOR_THROWN then
-;        ARRAYWRITE DisplayString, ["=T", 0]
-;    else
-;        ARRAYWRITE DisplayString, ["=C", 0]
-;    endif
-;    gosub display_write_string
+    ARRAYWRITE DisplayString, [hex switch_bank_value, 0]
+    gosub display_write_string
     gosub display_clear_to_end_of_line
     return
 

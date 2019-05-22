@@ -32,58 +32,48 @@ interface_debounce    var byte[I2C_INTERFACE_COUNT]
 i2c_addr        var byte
 my_address      var byte
 
-switch_bank_value   var byte
+switch_bank_value   var word
 
+;=============================================================================
 #ifdef DO_SWITCH_CONTROLLER
+switch_bank_write_from_eeprom:
+    gosub switch_eeprom_read_bank
+    switch_bank_value = ee_word
+#ifdef DO_RS485
+    if switch_address != my_address then
+        goto rs485_send_bank_write_request
+    endif
+#endif
+    goto switch_bank_write
+#endif
+
 ;=============================================================================
 bval var byte
 switch_bank_write:
-    gosub switch_eeprom_read_bank
-    if switch_address = my_address then
-        i2c_addr = (switch_bank // BANKS_PER_INTERFACE) << 1
-        if (switch_bank / BANKS_PER_INTERFACE) = 0 then
-            bval = ee_word & $ff
-            i2c_addr = i2c_addr + PCF8574_I2C_ADDRESS 
-#ifdef DO_DEBUG_SWITCH_MOTOR
-            if (switch_bank = 0) then
-                DisplayRow = 1
-                DisplayCol = 0
-                gosub display_set_cursor
-                ARRAYWRITE DisplayString, [hex i2c_addr, " ", hex bval, " ", 0]
-                gosub display_write_string
-            endif
-#endif
-            I2CWRITE SW0_INTERFACE_I2C_DATA, SW0_INTERFACE_I2C_CLK, i2c_addr, [ bval ], i2c_write_error
-            pause 10
-            bval = ((ee_word >> 8) & $3) | $fc
-            i2c_addr = i2c_addr - PCF8574_I2C_ADDRESS + PCF8574A_I2C_ADDRESS 
-#ifdef DO_DEBUG_SWITCH_MOTOR
-            if (switch_bank = 0) then
-                ARRAYWRITE DisplayString, [hex i2c_addr, " ", hex bval, 0]
-                gosub display_write_string
-                gosub display_clear_to_end_of_line
-            endif
-#endif
-            I2CWRITE SW0_INTERFACE_I2C_DATA, SW0_INTERFACE_I2C_CLK, i2c_addr, [ bval ], i2c_write_error
-            pause 10
+    i2c_addr = (switch_bank // BANKS_PER_INTERFACE) << 1
+    if (switch_bank / BANKS_PER_INTERFACE) = 0 then
+        bval = switch_bank_value & $ff
+        i2c_addr = i2c_addr + PCF8574_I2C_ADDRESS 
+        I2CWRITE SW0_INTERFACE_I2C_DATA, SW0_INTERFACE_I2C_CLK, i2c_addr, [ bval ], i2c_write_error
+        pause 10
+        bval = ((switch_bank_value >> 8) & $3) | $fc
+        i2c_addr = i2c_addr - PCF8574_I2C_ADDRESS + PCF8574A_I2C_ADDRESS 
+        I2CWRITE SW0_INTERFACE_I2C_DATA, SW0_INTERFACE_I2C_CLK, i2c_addr, [ bval ], i2c_write_error
+        pause 10
 #ifndef DO_DEVELOPMENT_BOARD
-        else
-            bval = ee_word & $ff
-            i2c_addr = i2c_addr + PCF8574_I2C_ADDRESS 
-            I2CWRITE SW1_INTERFACE_I2C_DATA, SW1_INTERFACE_I2C_CLK, i2c_addr, [ bval ], i2c_write_error
-            pause 10
-            bval = ((ee_word >> 8) & $3) | $fc
-            i2c_addr = i2c_addr - PCF8574_I2C_ADDRESS + PCF8574A_I2C_ADDRESS 
-            I2CWRITE SW1_INTERFACE_I2C_DATA, SW1_INTERFACE_I2C_CLK, i2c_addr, [ bval ], i2c_write_error
-            pause 10
-#endif
-        endif
     else
-;????send to extension processor
+        bval = switch_bank_value & $ff
+        i2c_addr = i2c_addr + PCF8574_I2C_ADDRESS 
+        I2CWRITE SW1_INTERFACE_I2C_DATA, SW1_INTERFACE_I2C_CLK, i2c_addr, [ bval ], i2c_write_error
+        pause 10
+        bval = ((switch_bank_value >> 8) & $3) | $fc
+        i2c_addr = i2c_addr - PCF8574_I2C_ADDRESS + PCF8574A_I2C_ADDRESS 
+        I2CWRITE SW1_INTERFACE_I2C_DATA, SW1_INTERFACE_I2C_CLK, i2c_addr, [ bval ], i2c_write_error
+        pause 10
+#endif
     endif
 i2c_write_error:
     return
-#endif
 
 ;=============================================================================
 #ifdef DO_SWITCH_CONTROLLER
@@ -148,15 +138,10 @@ handle_switch_request:
             if operate_mode = MODE_OPERATE then
                 switch_motor_state = switch_motor_direction
                 gosub switch_eeprom_write_switch_state
-                gosub switch_bank_write
+                gosub switch_bank_write_from_eeprom
              endif
         endif
     endif
-    return
-#endif
-#ifdef DO_SWITCH_EXTENSION
-handle_rs485_switch_request:
-    ;????write the switch motor, or write the switch bank
     return
 #endif
 
@@ -196,16 +181,10 @@ switch_motor_button_check:
                 if switch_bank_value then
                     led_to_change = LED_SWITCHMOTOR_BUTTON
                     gosub led_flash
-    DisplayRow = 1
-    DisplayCol = 0
-    gosub display_set_cursor
-    ARRAYWRITE DisplayString, [hex interface_index, "-", hex bank_index, " ", hex switch_bank_value, 0]
-    gosub display_write_string
-    gosub display_clear_to_end_of_line
                     ; if any button changed state
                     switch_bank = (interface_index * BANKS_PER_INTERFACE) + bank_index
                     if last_motor_bank_state[switch_bank] != switch_bank_value then
-                        gosub rs485_send_bank
+                        gosub rs485_send_bank_button_state
                     endif
                 endif
                 last_motor_bank_state[switch_bank] = switch_bank_value 
@@ -234,7 +213,7 @@ switch_motor_button_check:
                             if operate_mode == MODE_OPERATE then
                                 switch_motor_state = SWITCH_MOTOR_TOGGLE
                                 gosub switch_eeprom_write_switch_state
-                                gosub switch_bank_write
+                                gosub switch_bank_write_from_eeprom
                             elseif operate_mode == MODE_PROGRAM then
                                 if loconet_switch != $ffff then
                                     if route_number != ROUTE_NOT_FOUND then
@@ -272,7 +251,7 @@ switch_motor_initialize:
     ;write all the switch motor controls to match the values read from eeprom
     for switch_address = 0 to NUMBER_EXTENSION_PROCESSORS - 1
         for switch_bank = 0 to ((I2C_INTERFACE_COUNT * BANKS_PER_INTERFACE) - 1)
-            gosub switch_bank_write
+            gosub switch_bank_write_from_eeprom
         next switch_bank
     next switch_address
 

@@ -1,29 +1,24 @@
 ;=============================================================================
-RS485_RX_PACKET_LEN   con 3
-    ; RS485_RX_PACKET_LEN is the number of bytes that will be saved from 
-    ; each packet.  It does not include the packet opcode or checksum.
-    ; It's only big enough to contain the largest packet parsed by this code.
-    ; If you want to parse a longer packet, just change this value.
-
+RS485_PACKET_LEN   con 5
 
 ;=============================================================================
 rs485_rx_byte             var byte                ; last byte taken from receive FIFO
 rs485_rx_opcode           var byte                ; opcode from the last received packet 
 rs485_rx_checksum         var byte                ; checksum accumulation when receiving a packet
-rs485_rx_packet           var byte[RS485_RX_PACKET_LEN] ; a buffer to contain the packet contents
+rs485_rx_packet           var byte[RS485_PACKET_LEN] ; a buffer to contain the packet contents
 rs485_rx_packet_index     var byte                ; index into rs485_rx_packet buffer
 rs485_rx_packet_length    var byte                ; number of bytes left in the packet being received
 
 rs485_rx_state var byte                           ; current state of the receive state machine
 
+;=============================================================================
+rs485_tx_opcode     var byte
+rs485_tx_data       var byte[RS485_PACKET_LEN]
+rs485_tx_len        var byte                      ; number of bytes in rs485_tx_data
+rs485_tx_checksum   var byte                      ; checksum accumulation when transmitting a packet
 
 ;=============================================================================
-RS485_MAX_TX_COUNT    con 5
-
-rs485_tx_opcode     var byte
-rs485_tx_data       var byte[RS485_MAX_TX_COUNT]
-rs485_tx_len        var byte                ; number of bytes in rs485_tx_data
-rs485_tx_checksum   var byte                ; checksum accumulation when transmitting a packet
+ii var byte
 
 rs485_wait_tx_empty:
     while PIR1.4 = 0 ; while PIR1.TXIF = 0  wait for TXREG empty
@@ -31,6 +26,23 @@ rs485_wait_tx_empty:
     return
     
 rs485_transmit:
+#ifdef DO_DISPLAY
+#define DISPLAY_485_TX_DATA
+#ifdef DISPLAY_485_TX_DATA
+    DisplayRow = 1
+    DisplayCol = 0
+    gosub display_set_cursor
+    ARRAYWRITE DisplayString, [dec rs485_tx_len, ":", 0 ]
+    gosub display_write_string
+    for ii = 0 to rs485_tx_len - 1
+        if ii = 8 then exit
+        ARRAYWRITE DisplayString, [hex2 rs485_tx_data[ii], 0 ]
+        gosub display_write_string
+    next ii
+    gosub display_clear_to_end_of_line
+#endif
+#endif
+
     RS485_TXE = 1
     if rs485_tx_len = 1 then
         rs485_tx_opcode.6 = 0
@@ -45,42 +57,69 @@ rs485_transmit:
         rs485_tx_opcode.6 = 1
         rs485_tx_opcode.5 = 1
     endif
+
+    ; send the opcode
     gosub rs485_wait_tx_empty
     TXREG = rs485_tx_opcode
     rs485_tx_checksum = rs485_tx_opcode
+
+    ; send the packet length if necessary
     if rs485_tx_opcode.6 and rs485_tx_opcode.5 then
         gosub rs485_wait_tx_empty
         TXREG = rs485_tx_len
         rs485_tx_checksum = rs485_tx_checksum ^ rs485_tx_len
     endif
-    ii var byte
+
+    ; send the packet data
     for ii = 0 to rs485_tx_len - 1
         gosub rs485_wait_tx_empty
         TXREG = rs485_tx_data[ii]
         rs485_tx_checksum = rs485_tx_checksum ^ rs485_tx_data[ii]
     next ii
-    rs485_tx_checksum = rs485_tx_checksum ^ $ff
+
+    ; send the checksum
     gosub rs485_wait_tx_empty
-    TXREG = rs485_tx_checksum
+    TXREG = rs485_tx_checksum ^ $ff
+
+    ;send an extra zero to be sure all the data is out before disabling the transmitter
     gosub rs485_wait_tx_empty
+    TXREG = 0
+    gosub rs485_wait_tx_empty
+
     RS485_TXE = 0
     return
 
 ;=============================================================================
-rs485_send_bank:
-    rs485_tx_opcode = OPC_BANK
+#ifdef DO_SWITCH_CONTROLLER
+rs485_send_bank_write_request:
+    rs485_tx_opcode = OPC_BANK_WRITE
     rs485_tx_data[0] = my_address
     rs485_tx_data[1] = $55;????sequence number?
     rs485_tx_data[2] = switch_bank
-    rs485_tx_data[3] = switch_bank_value
-    rs485_tx_len = 4
+    rs485_tx_data[3] = switch_bank_value.byte1
+    rs485_tx_data[4] = switch_bank_value.byte0
+    rs485_tx_len = 5
     goto rs485_transmit
+#endif
+
+;=============================================================================
+#ifdef DO_SWITCH_EXTENSION
+rs485_send_bank_button_state:
+    rs485_tx_opcode = OPC_BANK_BUTTON_STATE
+    rs485_tx_data[0] = my_address
+    rs485_tx_data[1] = $33;????sequence number?
+    rs485_tx_data[2] = switch_bank
+    rs485_tx_data[3] = switch_bank_value.byte1
+    rs485_tx_data[4] = switch_bank_value.byte0
+    rs485_tx_len = 5
+    goto rs485_transmit
+#endif
 
 ;=============================================================================
 rs485_send_ACK:
     rs485_tx_opcode = OPC_ACK
     rs485_tx_data[0] = my_address
-    rs485_tx_data[1] = 0;????sequence number?
+    rs485_tx_data[1] = $AA;????sequence number?
     rs485_tx_len = 2
     goto rs485_transmit
 
@@ -133,20 +172,28 @@ rs485_receive:
                             if (rs485_rx_opcode != OPC_ACK) then
                                 gosub rs485_send_ACK
                             endif
-                            if (rs485_rx_opcode = OPC_SW_REQ) then
-                                if (rs485_rx_packet[2] & $10) then 
-;????                                    loconet_switch = ((rs485_rx_packet[2] & $f) << 7) + rs485_rx_packet[1]
-;????                                    switch_motor_direction = rs485_rx_packet[2] & SWITCH_MOTOR_CLOSED
-;????                                    gosub handle_rs485_switch_request
-                                endif
-                            elseif (rs485_rx_opcode = OPC_ACK) then
 ;????is the sequence number correct
+                            if (rs485_rx_opcode = OPC_ACK) then
 ;????cancel retries
+#ifdef DO_SWITCH_EXTENSION
+                            elseif (rs485_rx_opcode = OPC_BANK_WRITE) then
+                                switch_bank = rs485_tx_data[2]
+                                switch_bank_value.byte1 = rs485_tx_data[3]
+                                switch_bank_value.byte0 = rs485_tx_data[4]
+                                gosub switch_bank_write
+#endif
+#ifdef DO_SWITCH_CONTROLLER
+                            elseif (rs485_rx_opcode = OPC_BANK_BUTTON_STATE) then
+                                switch_bank = rs485_tx_data[2]
+                                switch_bank_value.byte1 = rs485_tx_data[3]
+                                switch_bank_value.byte0 = rs485_tx_data[4]
+                                ;????gosub handle_remote_button_press
+#endif
                             endif
                         endif
                     endif
                 else
-                    if rs485_rx_packet_index < RS485_RX_PACKET_LEN then
+                    if rs485_rx_packet_index < RS485_PACKET_LEN then
                         rs485_rx_packet[rs485_rx_packet_index] = rs485_rx_byte
                         rs485_rx_packet_index = rs485_rx_packet_index + 1
                     endif
