@@ -63,7 +63,11 @@ endasm
 
 ;=============================================================================
 ; DEFINEs:
+#if __PROCESSOR__ = "18F13K22"
+define OSC 16
+#else
 define OSC 32
+#endif
 define I2C_SLOW 1   'Enables using 100KHz I2C device with OSC above 8MHz
 define WRITE_INT 1  'Disables interrupts during EEPROM writes
 
@@ -195,6 +199,14 @@ RC4PPS = $14    ; pin select RC4 is RC4
 #endif
 
 ;=============================================================================
+#ifdef DO_SWITCH_EXTENSION
+    EXT_ADDR0               var PORTC.4
+    EXT_ADDR1               var PORTC.5
+    EXT_ADDR2               var PORTC.6
+    EXT_ADDR3               var PORTC.7
+#endif
+
+;=============================================================================
 GLOBAL_INTERRUPT_ENABLE     var INTCON.7
 PERIPHERAL_INTERRUPT_ENABLE var INTCON.6
 
@@ -231,8 +243,8 @@ EEPROM_BYTES    con 16384
     SWITCH_MOTOR_INTERFACE0_INTERRUPT  var PORTC.5
 #else
 #ifdef DO_SWITCH_EXTENSION
-    SWITCH_MOTOR_INTERFACE0_INTERRUPT  var PORTA.2
-    SWITCH_MOTOR_INTERFACE1_INTERRUPT  var PORTC.2
+    SWITCH_MOTOR_INTERFACE0_INTERRUPT  var PORTC.2
+    SWITCH_MOTOR_INTERFACE1_INTERRUPT  var PORTA.2
 #endif
 #ifdef DO_SWITCH_CONTROLLER
     SWITCH_MOTOR_INTERFACE0_INTERRUPT  var PORTA.2
@@ -241,23 +253,23 @@ EEPROM_BYTES    con 16384
 #endif
 #endif
 
-#ifdef DO_LOCONET
+#ifdef DO_SWITCH_EXTENSION
 ;=============================================================================
-; Initialize UART for receiving Loconet data
+; Initialize UART for receiving RS45data
 ;
 #if __PROCESSOR__ = "18F13K22"
 TXSTA = $20     ; TX9 = 0, TXEN = 1, SYNC = 0, BRGH = 0
 BAUDCON = $10   ; SCKP = 1, BRG16 = 0   
     ;SCKP = 1 inverts transmit for loopback testing
 SPBRGH = 0
-SPBRG = 29      ; SP1RGH:SP1BRG = ((OSC * 1000000) / (64 * 16500)) - 1
-                ;    OSC = 32
+SPBRG = 14      ; SP1RGH:SP1BRG = ((OSC * 1000000) / (64 * 16500)) - 1
+                ;    OSC = 16
                 ;    64 is divisor chosen by SYNC, BRGH and BRG16
                 ;    16500 is the desired baud rate
 
 while PIR1.5    ; read receive register until receive interrupt disappears
 ASM
-    movlb   15        ; set bank to 15
+    banksel RCREG
     movf    RCREG, W  ; W = RCREG
 ENDASM
 wend
@@ -265,7 +277,16 @@ PIR1.4 = 0      ; PIR3.TXIF = 0  clear serial port transmit interrupt flag
 RCSTA.7 = 1     ; SPEN = 1       enable serial port
 PIE1.5 = 1      ; RCIE = 1       enable receive interrupt
 RCSTA.4 = 1     ; CREN = 1       enable the serial port receiver
-#else
+
+RS485_TXE       var     PORTA.4
+
+#endif
+#endif
+
+#ifdef DO_LOCONET
+;=============================================================================
+; Initialize UART for receiving Loconet data
+;
 #if __PROCESSOR__ = "16F18856"
 RXPPS = $17     ; pin select RX is RC7
 RC6PPS = $10    ; pin select TX is RC6 as output
@@ -285,7 +306,7 @@ SP1BRGL = 29    ; SP1RGH:SP1BRGL = ((OSC * 1000000) / (64 * 16500)) - 1
 
 while PIR3.5    ; read receive register until receive interrupt disappears
 ASM
-    movlb   2         ; set bank to 2
+    banksel RC1REG
     movf    RC1REG, W ; W = RC1REG
 ENDASM
 wend
@@ -293,6 +314,30 @@ PIR3.4 = 0      ; PIR3.TXIF = 0  clear serial port transmit interrupt flag
 RC1STA.7 = 1    ; SPEN = 1       enable serial port
 PIE3.5 = 1      ; RCIE = 1       enable receive interrupt
 RC1STA.4 = 1    ; CREN = 1       enable the serial port receiver
+
+#ifdef DO_RS485
+TX2STA = $20    ; TX9 = 0, TXEN = 1, SYNC = 0, BRGH = 0
+BAUD2CON = $10  ; SCKP = 1, BRG16 = 0   
+    ;SCKP = 1 inverts transmit for loopback testing
+SP2BRGH = 0
+SP2BRGL = 29    ; SP2RGH:SP2BRGL = ((OSC * 1000000) / (64 * 16500)) - 1
+                ;    OSC = 32
+                ;    64 is divisor chosen by SYNC, BRGH and BRG16
+                ;    16500 is the desired baud rate
+
+while PIR3.7    ; read receive register until receive interrupt disappears
+ASM
+    banksel RC2REG
+    movf    RC2REG, W ; W = RC2REG
+ENDASM
+wend
+PIR3.6 = 0      ; PIR3.TXIF = 0  clear serial port transmit interrupt flag
+RC2STA.7 = 1    ; SPEN = 1       enable serial port
+PIE3.7 = 1      ; RCIE = 1       enable receive interrupt
+RC2STA.4 = 1    ; CREN = 1       enable the serial port receiver
+
+RS485_TXE       var     PORTC.2
+
 #endif
 #endif
 

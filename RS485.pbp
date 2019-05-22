@@ -1,6 +1,4 @@
 ;=============================================================================
-rs485_address   var byte
-
 RS485_RX_PACKET_LEN   con 3
     ; RS485_RX_PACKET_LEN is the number of bytes that will be saved from 
     ; each packet.  It does not include the packet opcode or checksum.
@@ -33,6 +31,7 @@ rs485_wait_tx_empty:
     return
     
 rs485_transmit:
+    RS485_TXE = 1
     if rs485_tx_len = 1 then
         rs485_tx_opcode.6 = 0
         rs485_tx_opcode.5 = 0
@@ -63,12 +62,24 @@ rs485_transmit:
     rs485_tx_checksum = rs485_tx_checksum ^ $ff
     gosub rs485_wait_tx_empty
     TXREG = rs485_tx_checksum
+    gosub rs485_wait_tx_empty
+    RS485_TXE = 0
     return
+
+;=============================================================================
+rs485_send_bank:
+    rs485_tx_opcode = OPC_BANK
+    rs485_tx_data[0] = my_address
+    rs485_tx_data[1] = $55;????sequence number?
+    rs485_tx_data[2] = switch_bank
+    rs485_tx_data[3] = switch_bank_value
+    rs485_tx_len = 4
+    goto rs485_transmit
 
 ;=============================================================================
 rs485_send_ACK:
     rs485_tx_opcode = OPC_ACK
-    rs485_tx_data[0] = 0;????rs485 address
+    rs485_tx_data[0] = my_address
     rs485_tx_data[1] = 0;????sequence number?
     rs485_tx_len = 2
     goto rs485_transmit
@@ -118,7 +129,7 @@ rs485_receive:
                     rs485_rx_state = RX_STATE_WAITING_FOR_OPCODE
                     if rs485_rx_checksum = $ff then
                         ; valid packet received
-                        if (rs485_rx_packet[0] = rs485_address) then
+                        if (rs485_rx_packet[0] = my_address) then
                             if (rs485_rx_opcode != OPC_ACK) then
                                 gosub rs485_send_ACK
                             endif
@@ -126,7 +137,7 @@ rs485_receive:
                                 if (rs485_rx_packet[2] & $10) then 
 ;????                                    loconet_switch = ((rs485_rx_packet[2] & $f) << 7) + rs485_rx_packet[1]
 ;????                                    switch_motor_direction = rs485_rx_packet[2] & SWITCH_MOTOR_CLOSED
-;????                                    gosub handle_switch_request
+;????                                    gosub handle_rs485_switch_request
                                 endif
                             elseif (rs485_rx_opcode = OPC_ACK) then
 ;????is the sequence number correct
@@ -152,9 +163,8 @@ rs485_receive:
 
 ;=============================================================================
 rs485_initialize:
-    rs485_address = 0 ;????
     rs485_rx_state = RX_STATE_WAITING_FOR_OPCODE
-;????    loconet_switch = $ffff
+    loconet_switch = $ffff
     return
 
 ;=============================================================================

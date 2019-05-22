@@ -16,17 +16,23 @@ MAX_SWITCH_BANKS            con 256  ;(I2C_INTERFACE_COUNT * BANKS_PER_INTERFACE
 #endif
 
 ;=============================================================================
-last_motor_button_state var bit[SWITCH_MOTOR_COUNT]
-    ; keeps track of whether each button was pressed or
-    ; released when last debounced
+#ifdef DO_SWITCH_EXTENSION
+    NUM_LOCAL_SWITCH_BANKS  con 16  ; I2C_INTERFACE_COUNT * BANKS_PER_INTERFACE
+    last_motor_bank_state var byte[NUM_LOCAL_SWITCH_BANKS]
+#else
+    last_motor_button_state var bit[SWITCH_MOTOR_COUNT]
+        ; keeps track of whether each button was pressed or
+        ; released when last debounced
+#endif
 
 ;=============================================================================
 interface_debounce    var byte[I2C_INTERFACE_COUNT]
 
 ;=============================================================================
-; "local" variables
 i2c_addr        var byte
 my_address      var byte
+
+switch_bank_value   var byte
 
 #ifdef DO_SWITCH_CONTROLLER
 ;=============================================================================
@@ -75,9 +81,9 @@ switch_bank_write:
     else
 ;????send to extension processor
     endif
-#endif
 i2c_write_error:
     return
+#endif
 
 ;=============================================================================
 #ifdef DO_SWITCH_CONTROLLER
@@ -149,7 +155,7 @@ handle_switch_request:
     return
 #endif
 #ifdef DO_SWITCH_EXTENSION
-handle_switch_request:
+handle_rs485_switch_request:
     ;????write the switch motor, or write the switch bank
     return
 #endif
@@ -184,6 +190,26 @@ switch_motor_button_check:
 #endif
                 endif
                 i2c_read_value = ~i2c_read_value
+#ifdef DO_SWITCH_EXTENSION
+                ; if any button is pushed
+                switch_bank_value = (i2c_read_value >> 3) & $1f
+                if switch_bank_value then
+                    led_to_change = LED_SWITCHMOTOR_BUTTON
+                    gosub led_flash
+    DisplayRow = 1
+    DisplayCol = 0
+    gosub display_set_cursor
+    ARRAYWRITE DisplayString, [hex interface_index, "-", hex bank_index, " ", hex switch_bank_value, 0]
+    gosub display_write_string
+    gosub display_clear_to_end_of_line
+                    ; if any button changed state
+                    switch_bank = (interface_index * BANKS_PER_INTERFACE) + bank_index
+                    if last_motor_bank_state[switch_bank] != switch_bank_value then
+                        gosub rs485_send_bank
+                    endif
+                endif
+                last_motor_bank_state[switch_bank] = switch_bank_value 
+#else
                 for switch_index = 0 to SWITCH_MOTORS_PER_BANK-1
                     sm  var byte
                     sm = (((interface_index * BANKS_PER_INTERFACE) + bank_index) * SWITCH_MOTORS_PER_BANK) + switch_index
@@ -195,10 +221,6 @@ switch_motor_button_check:
                             display_update_needed = 1
 #endif
 #ifdef DO_DEVELOPEMENT_BOARD
-                            led_to_change = LED_SWITCHMOTOR_BUTTON
-                            gosub led_flash
-#endif
-#ifdef DO_SWITCH_EXTENSION
                             led_to_change = LED_SWITCHMOTOR_BUTTON
                             gosub led_flash
 #endif
@@ -229,15 +251,13 @@ switch_motor_button_check:
 #endif
                             route_number = ROUTE_NOT_FOUND
 #endif
-#ifdef DO_SWITCH_EXTENSION
-                            ;????send switch to controller
-#endif
                         endif
                         last_motor_button_state[sm] = 1
                     else
                         last_motor_button_state[sm] = 0
                     endif
                 next switch_index
+#endif
 i2c_read_error:
             next bank_index
         endif
@@ -259,7 +279,11 @@ switch_motor_initialize:
     gosub route_initialize
     switch_not_defined = 1
 #else
-    ;????read and assign my_address from address switches
+    ;read my_address from address switches
+    my_address =              (EXT_ADDR3 << 3)
+    my_address = my_address + (EXT_ADDR2 << 2)
+    my_address = my_address + (EXT_ADDR1 << 1)
+    my_address = my_address +  EXT_ADDR0
 #endif
     return
 
