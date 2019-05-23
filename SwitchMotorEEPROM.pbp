@@ -1,7 +1,4 @@
 ;=============================================================================
-MAX_LOCONET_SWITCHES    con 999
-
-;=============================================================================
 TRANSLATE_TABLE_EEPROM_ADDRESS      con 0
     ; the Translate table contains MAX_LOCONET_SWITCHES entries, one for each possible Loconet
     ; switch number.
@@ -67,6 +64,28 @@ switch_eeprom_find_reverse_translation:
         endif
     next ee_address
     return
+
+;=============================================================================
+#ifdef DO_SWITCH_CONTROLLER
+switch_eeprom_initialize:
+    for switch_address = 0 to NUMBER_EXTENSION_PROCESSORS-1
+        for switch_bank = 0 to (I2C_INTERFACE_COUNT*BANKS_PER_INTERFACE)-1
+            ee_address = SWITCH_MOTOR_STATE_EEPROM_ADDRESS + (((switch_address << 3) + switch_bank) * 2)
+            gosub eeprom_read_word
+            if ee_word != $ffff then
+                switch_bank_value = ee_word
+                if switch_address = my_address then
+                    gosub switch_bank_write
+#ifdef DO_RS485
+                else
+                    gosub rs485_send_bank_write_request
+#endif
+                endif
+            endif
+        next switch_bank
+    next switch_address
+    return
+#endif
 
 ;=============================================================================
 switch_motor_state  var byte

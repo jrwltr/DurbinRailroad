@@ -30,6 +30,7 @@ INCLUDE "LED.pbp"
 INCLUDE "LCD4X20.pbp"
 #endif
 INCLUDE "LOCONET.inc"
+INCLUDE "SwitchMotor.inc"
 INCLUDE "SwitchMotor.pbp"
 INCLUDE "RS485.pbp"
 

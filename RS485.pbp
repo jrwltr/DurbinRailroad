@@ -187,7 +187,7 @@ rs485_receive:
                                 switch_bank = rs485_tx_data[2]
                                 switch_bank_value.byte1 = rs485_tx_data[3]
                                 switch_bank_value.byte0 = rs485_tx_data[4]
-                                ;????gosub handle_remote_button_press
+                                gosub handle_remote_button_press
 #endif
                             endif
                         endif
