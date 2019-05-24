@@ -133,13 +133,6 @@ rs485_send_ACK:
 ;   the interrupt routine detects received data
 ;
 rs485_receive:
-
-if DisplayRow != 1 then;????
-    DisplayRow = 1
-    DisplayCol = 0
-    gosub display_set_cursor
-endif
-
     while rs485_rx_head != rs485_rx_tail 
         rs485_rx_byte = rs485_rx_data_fifo[rs485_rx_head]
 #ifdef SHOW_485_RX_DATA

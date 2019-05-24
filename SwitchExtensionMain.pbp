@@ -2,7 +2,8 @@
 #define DO_SWITCH_EXTENSION
 #define DO_RS485
 #define DO_LED
-#define DO_DISPLAY
+
+;#define DO_DISPLAY
 
 ;=============================================================================
 
@@ -31,18 +32,16 @@ INCLUDE "SwitchMotor.pbp"
 INCLUDE "RS485.pbp"
 
 ;=============================================================================
+#ifdef DO_DISPLAY
 update_display:
     DisplayRow = 0
     DisplayCol = 0
     gosub display_set_cursor
-    ARRAYWRITE DisplayString, [hex my_address, " ", 0 ]
-    gosub display_write_string
-    ARRAYWRITE DisplayString, [dec switch_bank, " ", 0 ]
-    gosub display_write_string
-    ARRAYWRITE DisplayString, [hex switch_bank_value, 0]
+    ARRAYWRITE DisplayString, ["ADDR:", hex my_address, " ", 0 ]
     gosub display_write_string
     gosub display_clear_to_end_of_line
     return
+#endif
 
 ;=============================================================================
 init:
