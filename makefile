@@ -16,7 +16,8 @@ all: $(HEXTARGETS)
 ##############################################################################
 COMMON_SOURCE		=		ProcessorConfiguration.pbp \
 							Interrupt.pbp \
-							Mainloop.pbp
+							Mainloop.pbp \
+							Loconet.inc
 
 TURNTABLE_SOURCE		=	TurntableMain.pbp \
 							LongMath.pbp \
@@ -28,6 +29,7 @@ TURNTABLE_SOURCE		=	TurntableMain.pbp \
 							LOCONET.pbp \
 
 SWITCH_SOURCE 			=	SwitchMainCommon.pbp \
+							SwitchMotor.inc \
 							SwitchMotor.pbp \
 							SwitchRoutes.pbp \
 							SwitchMotorEEPROM.pbp \
@@ -39,6 +41,7 @@ SWITCH_SOURCE 			=	SwitchMainCommon.pbp \
 
 
 SWITCH_EXTENSION_SOURCE =	SwitchExtensionMain.pbp \
+							SwitchMotor.inc \
 							SwitchMotor.pbp \
 							RS485.pbp
 

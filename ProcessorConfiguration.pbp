@@ -94,7 +94,8 @@ TRISA  = %00000100    'Set PORTA bits 2 as inputs, the rest as outputs
 TRISB  = %00101111    'Set PORTB bits 0, 1, 2, 3, 5 as inputs, the rest as outputs
 TRISC  = %11111100    'Set PORTC bits 2, 3, 4, 5, 6, 7 as inputs, the rest as outputs
 WPUA   = %00000100    'Set weak pullups on PORTA bits 2, 5, the rest as outputs
-#else
+#endif
+#ifdef DO_SWITCH_CONTROLLER
 TRISA  = %00100100    'Set PORTA bits 2, 5 as inputs, the rest as outputs
 TRISB  = %00001111    'Set PORTB bits 0, 1, 2, 3 as inputs, the rest as outputs
 TRISC  = %10110001    'Set PORTC bits 0, 4, 5, 7 as inputs, the rest as outputs
@@ -259,8 +260,7 @@ EEPROM_BYTES    con 16384
 ;
 #if __PROCESSOR__ = "18F13K22"
 TXSTA = $20     ; TX9 = 0, TXEN = 1, SYNC = 0, BRGH = 0
-BAUDCON = $10   ; SCKP = 1, BRG16 = 0   
-    ;SCKP = 1 inverts transmit for loopback testing
+BAUDCON = $00   ; SCKP = 0, BRG16 = 0   
 SPBRGH = 0
 SPBRG = 14      ; SP1RGH:SP1BRG = ((OSC * 1000000) / (64 * 16500)) - 1
                 ;    OSC = 16
@@ -278,22 +278,24 @@ RCSTA.7 = 1     ; SPEN = 1       enable serial port
 PIE1.5 = 1      ; RCIE = 1       enable receive interrupt
 RCSTA.4 = 1     ; CREN = 1       enable the serial port receiver
 
-RS485_TXE       var     PORTA.4
+RS485_TXE       var PORTA.4
+RS485_TXREG     var TXREG
+RS485_TXIF      var PIR1.4
 
 #endif
 #endif
 
 #ifdef DO_LOCONET
 ;=============================================================================
-; Initialize UART for receiving Loconet data
+; Initialize UART1 for receiving Loconet data
 ;
 #if __PROCESSOR__ = "16F18856"
 RXPPS = $17     ; pin select RX is RC7
 RC6PPS = $10    ; pin select TX is RC6 as output
 #endif
 #if __PROCESSOR__ = "16F19156"
-RX1PPS = $17    ; pin select RX is RC7
-RC6PPS = $0d    ; pin select TX is RC6 as output
+RX1PPS = $17    ; pin select RX1 is RC7
+RC6PPS = $0d    ; pin select TX1 is RC6 as output
 #endif
 TX1STA = $20    ; TX9 = 0, TXEN = 1, SYNC = 0, BRGH = 0
 BAUD1CON = $10  ; SCKP = 1, BRG16 = 0   
@@ -315,10 +317,16 @@ RC1STA.7 = 1    ; SPEN = 1       enable serial port
 PIE3.5 = 1      ; RCIE = 1       enable receive interrupt
 RC1STA.4 = 1    ; CREN = 1       enable the serial port receiver
 
+;=============================================================================
+; Initialize UART2 for receiving RS485 data
+;
 #ifdef DO_RS485
+#if __PROCESSOR__ = "16F19156"
+RX2PPS = $10    ; pin select RX2 is RC0
+RC1PPS = $0f    ; pin select TX2 is RC1 as output
+#endif
 TX2STA = $20    ; TX9 = 0, TXEN = 1, SYNC = 0, BRGH = 0
-BAUD2CON = $10  ; SCKP = 1, BRG16 = 0   
-    ;SCKP = 1 inverts transmit for loopback testing
+BAUD2CON = $00  ; SCKP = 0, BRG16 = 0   
 SP2BRGH = 0
 SP2BRGL = 29    ; SP2RGH:SP2BRGL = ((OSC * 1000000) / (64 * 16500)) - 1
                 ;    OSC = 32
@@ -336,7 +344,9 @@ RC2STA.7 = 1    ; SPEN = 1       enable serial port
 PIE3.7 = 1      ; RCIE = 1       enable receive interrupt
 RC2STA.4 = 1    ; CREN = 1       enable the serial port receiver
 
-RS485_TXE       var     PORTC.2
+RS485_TXE       var PORTC.2
+RS485_TXREG     var TX2REG
+RS485_TXIF      var PIR3.6
 
 #endif
 #endif
@@ -363,7 +373,7 @@ INTCON.2 = 0    ; INTCON.TMR0IF = 0  clear timer 0 interrupt flag
 INTCON.5 = 1    ; INTCON.TMR0IE = 1  enable timer 0 interrupt
 T0CON.7 = 1     ; T0CON.TMR0ON = 1 (enable)
 #else
-T0CON1 = $68    ; T0CON1.TOCS<2:0> = HFINTOSC, T0CON1.T0ASYNC = 0, T0CON1.T0CKPS<3:0> = 8 (1:256 prescaler)
+T0CON1 = $6a    ; T0CON1.TOCS<2:0> = HFINTOSC, T0CON1.T0ASYNC = 0, T0CON1.T0CKPS<3:0> = $a (1:1024 prescaler)
 PIR0.5 = 0      ; PIR0.TMR0IF = 0  clear timer 0 interrupt flag
 PIE0.5 = 1      ; PIE0.TMR0IE = 1  enable timer 0 interrupt
 T0CON0 = $80    ; T0CON0.T0EN = 1  enable timer 0

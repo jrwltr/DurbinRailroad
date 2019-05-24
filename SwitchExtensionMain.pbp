@@ -15,10 +15,6 @@ goto init   ; skip over interrupt service routine, functions, other included cod
 INCLUDE "Interrupt.pbp"
 
 ;=============================================================================
-loconet_switch      var word
-switch_motor        var byte
-switch_bank         var byte
-switch_address      var byte
 
 #ifdef DO_DISPLAY
 display_update_needed  var bit

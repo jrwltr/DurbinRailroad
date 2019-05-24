@@ -11,14 +11,11 @@ NUMBER_EXTENSION_PROCESSORS con 16
 MAX_SWITCH_BANKS            con 256  ;(I2C_INTERFACE_COUNT * BANKS_PER_INTERFACE * NUMBER_EXTENSION_PROCESSORS)
 #endif
 
+NUM_LOCAL_SWITCH_BANKS  con 16  ; I2C_INTERFACE_COUNT * BANKS_PER_INTERFACE
+
 ;=============================================================================
 #ifdef DO_SWITCH_EXTENSION
-    NUM_LOCAL_SWITCH_BANKS  con 16  ; I2C_INTERFACE_COUNT * BANKS_PER_INTERFACE
     last_motor_bank_state var byte[NUM_LOCAL_SWITCH_BANKS]
-#else
-    last_motor_button_state var bit[SWITCH_MOTOR_COUNT]
-        ; keeps track of whether each button was pressed or
-        ; released when last debounced
 #endif
 
 ;=============================================================================
@@ -30,4 +27,10 @@ my_address      var byte
 switch_bank_value   var word
 
 ;=============================================================================
+loconet_switch      var word
+switch_motor        var word
+switch_bank         var word
+switch_address      var word
+    CONTROLLER_RS485_ADDRESS   con $f
 
+;=============================================================================

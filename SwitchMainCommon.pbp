@@ -24,11 +24,6 @@ operate_mode        var byte
     MODE_ROUTE_EDIT con 2
 
 ;=============================================================================
-loconet_switch      var word
-switch_motor        var word
-switch_bank         var word
-switch_address      var word
-    LOCAL_ADDRESS   con $f
 switch_not_defined  var bit[1]
 
 display_update_needed  var bit
@@ -41,8 +36,8 @@ INCLUDE "LCD4X20.pbp"
 INCLUDE "EEPROM.pbp"
 INCLUDE "OnboardSwitches.pbp"
 INCLUDE "LOCONET.inc"
-INCLUDE "LOCONET.pbp"
 INCLUDE "SwitchMotor.inc"
+INCLUDE "LOCONET.pbp"
 INCLUDE "SwitchMotorEEPROM.pbp"
 INCLUDE "SwitchMotor.pbp"
 #ifdef DO_RS485

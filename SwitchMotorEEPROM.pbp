@@ -69,8 +69,8 @@ switch_eeprom_find_reverse_translation:
 #ifdef DO_SWITCH_CONTROLLER
 switch_eeprom_initialize:
     for switch_address = 0 to NUMBER_EXTENSION_PROCESSORS-1
-        for switch_bank = 0 to (I2C_INTERFACE_COUNT*BANKS_PER_INTERFACE)-1
-            ee_address = SWITCH_MOTOR_STATE_EEPROM_ADDRESS + (((switch_address << 3) + switch_bank) * 2)
+        for switch_bank = 0 to NUM_LOCAL_SWITCH_BANKS-1
+            ee_address = SWITCH_MOTOR_STATE_EEPROM_ADDRESS + (((switch_address << 4) + switch_bank) * 2)
             gosub eeprom_read_word
             if ee_word != $ffff then
                 switch_bank_value = ee_word
@@ -91,7 +91,7 @@ switch_eeprom_initialize:
 switch_motor_state  var byte
 
 switch_eeprom_read_bank:
-    ee_address = SWITCH_MOTOR_STATE_EEPROM_ADDRESS + (((switch_address << 3) + switch_bank) * 2)
+    ee_address = SWITCH_MOTOR_STATE_EEPROM_ADDRESS + (((switch_address << 4) + switch_bank) * 2)
     gosub eeprom_read_word
     if ee_word = $ffff then
         ; looks like an erased eeprom, initialize all switches to closed

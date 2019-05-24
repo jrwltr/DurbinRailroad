@@ -120,12 +120,59 @@ handle_switch_request:
     return
 #endif
 
+
+;=============================================================================
+i2c_read_value  var byte    ; last value read from I2C
+
+#ifdef DO_SWITCH_CONTROLLER
+
+switch_index    var byte
+
+scan_motor_buttons:
+    for switch_index = 0 to SWITCH_MOTORS_PER_BANK-1
+        sm  var byte
+        sm = (switch_address * SWITCH_MOTOR_COUNT) + ((switch_bank * SWITCH_MOTORS_PER_BANK) + switch_index)
+        ; if the button is pushed
+        if (i2c_read_value & (1 << switch_index)) then
+#ifdef DO_DISPLAY
+            display_update_needed = 1
+#endif
+#ifdef DO_DEVELOPEMENT_BOARD
+            led_to_change = LED_SWITCHMOTOR_BUTTON
+            gosub led_flash
+#endif
+#ifdef DO_SWITCH_CONTROLLER
+            switch_not_defined = 0
+#endif
+            switch_motor = switch_index
+#ifdef DO_OPERATE_PROGRAM
+            if operate_mode == MODE_OPERATE then
+                switch_motor_state = SWITCH_MOTOR_TOGGLE
+                gosub switch_eeprom_write_switch_state
+                gosub switch_bank_write_from_eeprom
+            elseif operate_mode == MODE_PROGRAM then
+                if loconet_switch != $ffff then
+                    if route_number != ROUTE_NOT_FOUND then
+                        route_number = loconet_switch
+                        gosub route_eeprom_delete
+                    endif
+                    gosub switch_eeprom_write_translation
+                endif
+            endif
+#endif
+#ifdef DO_LOCONET
+            gosub switch_eeprom_find_reverse_translation
+#endif
+            route_number = ROUTE_NOT_FOUND
+        endif
+    next switch_index
+    return
+#endif
+
 ;=============================================================================
 interface_index var byte
-switch_index    var byte
 bank_index      var byte
 debounce        var byte
-i2c_read_value  var byte    ; last value read from I2C
 
 switch_motor_button_check:
     for interface_index = 0 to I2C_INTERFACE_COUNT-1
@@ -138,7 +185,7 @@ switch_motor_button_check:
 #endif
         endif
         interface_debounce[interface_index] = debounce
-        if debounce = $3f then
+        if debounce = $7f then
             ; for each PCF8574 with buttons attached...
             for bank_index = 0 to BANKS_PER_INTERFACE-1
                 i2c_addr = PCF8574A_I2C_ADDRESS + (bank_index << 1)
@@ -149,68 +196,23 @@ switch_motor_button_check:
                     I2CREAD SW1_INTERFACE_I2C_DATA, SW1_INTERFACE_I2C_CLK, i2c_addr, [ i2c_read_value ], i2c_read_error
 #endif
                 endif
-                i2c_read_value = ~i2c_read_value
+                i2c_read_value = (~i2c_read_value >> 3) & $1f
 #ifdef DO_SWITCH_EXTENSION
                 ; if any button is pushed
-                switch_bank_value = (i2c_read_value >> 3) & $1f
-                if switch_bank_value then
+                if i2c_read_value then
                     led_to_change = LED_SWITCHMOTOR_BUTTON
                     gosub led_flash
                     ; if any button changed state
                     switch_bank = (interface_index * BANKS_PER_INTERFACE) + bank_index
-                    if last_motor_bank_state[switch_bank] != switch_bank_value then
+                    if last_motor_bank_state[switch_bank] != i2c_read_value then
                         gosub rs485_send_bank_button_state
                     endif
                 endif
-                last_motor_bank_state[switch_bank] = switch_bank_value 
+                last_motor_bank_state[switch_bank] = i2c_read_value
 #else
-                for switch_index = 0 to SWITCH_MOTORS_PER_BANK-1
-                    sm  var byte
-                    sm = (((interface_index * BANKS_PER_INTERFACE) + bank_index) * SWITCH_MOTORS_PER_BANK) + switch_index
-                    ; if the button is pushed
-                    if i2c_read_value & ($8 << switch_index) then
-                        ; if the button changed state...
-                        if last_motor_button_state[sm] = 0 then
-#ifdef DO_DISPLAY
-                            display_update_needed = 1
-#endif
-#ifdef DO_DEVELOPEMENT_BOARD
-                            led_to_change = LED_SWITCHMOTOR_BUTTON
-                            gosub led_flash
-#endif
-#ifdef DO_SWITCH_CONTROLLER
-                            switch_not_defined = 0
-#endif
-                            switch_motor = switch_index
-                            switch_bank = (interface_index * BANKS_PER_INTERFACE) + bank_index
-                            switch_address = my_address
-#ifdef DO_OPERATE_PROGRAM
-                            if operate_mode == MODE_OPERATE then
-                                switch_motor_state = SWITCH_MOTOR_TOGGLE
-                                gosub switch_eeprom_write_switch_state
-                                gosub switch_bank_write_from_eeprom
-                            elseif operate_mode == MODE_PROGRAM then
-                                if loconet_switch != $ffff then
-                                    if route_number != ROUTE_NOT_FOUND then
-                                        route_number = loconet_switch
-                                        gosub route_eeprom_delete
-                                    endif
-                                    gosub switch_eeprom_write_translation
-                                endif
-                            endif
-#endif
-#ifdef DO_SWITCH_CONTROLLER
-#ifdef DO_LOCONET
-                            gosub switch_eeprom_find_reverse_translation
-#endif
-                            route_number = ROUTE_NOT_FOUND
-#endif
-                        endif
-                        last_motor_button_state[sm] = 1
-                    else
-                        last_motor_button_state[sm] = 0
-                    endif
-                next switch_index
+                switch_bank = (interface_index * BANKS_PER_INTERFACE) + bank_index
+                switch_address = my_address
+                gosub scan_motor_buttons
 #endif
 i2c_read_error:
             next bank_index
@@ -219,15 +221,9 @@ i2c_read_error:
     return
 
 ;=============================================================================
-#ifdef DO_SWITCH_CONTROLLER
-handle_remote_button_press:
-    return
-#endif
-
-;=============================================================================
 switch_motor_initialize:
 #ifdef DO_SWITCH_CONTROLLER
-    my_address = LOCAL_ADDRESS
+    my_address = CONTROLLER_RS485_ADDRESS
 
     ;write all the switch motor controls to match the values read from eeprom
     gosub switch_eeprom_initialize
