@@ -16,6 +16,7 @@ rs485_tx_opcode     var byte
 rs485_tx_data       var byte[RS485_PACKET_LEN]
 rs485_tx_len        var byte                      ; number of bytes in rs485_tx_data
 rs485_tx_checksum   var byte                      ; checksum accumulation when transmitting a packet
+rs485_tx_sequence   var byte
 
 ;=============================================================================
 ii var byte
@@ -90,16 +91,16 @@ rs485_transmit:
     return
 
 ;=============================================================================
-;????can't allow data values with high bit set, except opcodes
 #ifdef DO_SWITCH_CONTROLLER
 rs485_send_bank_write_request:
     rs485_tx_opcode = OPC_BANK_WRITE
     rs485_tx_data[0] = switch_address
     rs485_tx_data[1] = my_address
-    rs485_tx_data[2] = $55;????sequence number?
+    rs485_tx_data[2] = rs485_tx_sequence
     rs485_tx_data[3] = switch_bank
-    rs485_tx_data[4] = switch_bank_value.byte1
-    rs485_tx_data[5] = switch_bank_value.byte0
+    ; can't allow data values with high bit set, except opcodes
+    rs485_tx_data[4] = (switch_bank_value >> 6) & $f
+    rs485_tx_data[5] = switch_bank_value & $3f
     rs485_tx_len = 6
     goto rs485_transmit
 #endif
@@ -110,21 +111,22 @@ rs485_send_bank_button_state:
     rs485_tx_opcode = OPC_BANK_BUTTON_STATE
     rs485_tx_data[0] = CONTROLLER_RS485_ADDRESS
     rs485_tx_data[1] = my_address
-    rs485_tx_data[2] = $33;????sequence number?
+    rs485_tx_data[2] = rs485_tx_sequence
     rs485_tx_data[3] = switch_bank
-    rs485_tx_data[4] = i2c_read_value
+    rs485_tx_data[4] = i2c_read_value & $1f
     rs485_tx_len = 5
     goto rs485_transmit
 #endif
 
 ;=============================================================================
-ack_address  var byte
+ack_address     var byte
+ack_sequence    var byte
 
 rs485_send_ACK:
     rs485_tx_opcode = OPC_ACK
     rs485_tx_data[0] = ack_address
     rs485_tx_data[1] = my_address
-    rs485_tx_data[2] = $55;????sequence number?
+    rs485_tx_data[2] = ack_sequence
     rs485_tx_len = 3
     goto rs485_transmit
 
@@ -180,16 +182,21 @@ rs485_receive:
                         if (rs485_rx_packet[0] = my_address) then
                             if (rs485_rx_opcode != OPC_ACK) then
                                 ack_address = rs485_rx_packet[1]
+                                ack_sequence = rs485_rx_packet[2]
                                 gosub rs485_send_ACK
                             endif
-;????is the sequence number correct rs485_rx_packet[2]
                             if (rs485_rx_opcode = OPC_ACK) then
+                                if rs485_tx_data[2] = rs485_tx_sequence then
+                                    rs485_tx_sequence = rs485_tx_sequence + 1
+                                    if rs485_tx_sequence & $80 then
+                                        rs485_tx_sequence = 0
+                                    endif
 ;????cancel retries
+                                endif
 #ifdef DO_SWITCH_EXTENSION
                             elseif (rs485_rx_opcode = OPC_BANK_WRITE) then
                                 switch_bank = rs485_rx_packet[3]
-                                switch_bank_value.byte1 = rs485_rx_packet[4]
-                                switch_bank_value.byte0 = rs485_rx_packet[5]
+                                switch_bank_value = (rs485_rx_packet[4] << 6) + rs485_rx_packet[5]
                                 gosub switch_bank_write
 #endif
 #ifdef DO_SWITCH_CONTROLLER

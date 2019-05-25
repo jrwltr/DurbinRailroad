@@ -259,12 +259,12 @@ EEPROM_BYTES    con 16384
 ; Initialize UART for receiving RS45data
 ;
 #if __PROCESSOR__ = "18F13K22"
-TXSTA = $20     ; TX9 = 0, TXEN = 1, SYNC = 0, BRGH = 0
-BAUDCON = $00   ; SCKP = 0, BRG16 = 0   
+TXSTA = $24     ; TX9 = 0, TXEN = 1, SYNC = 0, BRGH = 1
+BAUDCON = $80   ; SCKP = 0, BRG16 = 1   
 SPBRGH = 0
-SPBRG = 14      ; SP1RGH:SP1BRG = ((OSC * 1000000) / (64 * 16500)) - 1
+SPBRG = 33      ; SPRGH:SPBRG = ((OSC * 1000000) / (4 * 115200)) - 1
                 ;    OSC = 16
-                ;    64 is divisor chosen by SYNC, BRGH and BRG16
+                ;    4 is divisor chosen by SYNC, BRGH and BRG16
                 ;    16500 is the desired baud rate
 
 while PIR1.5    ; read receive register until receive interrupt disappears
@@ -325,12 +325,12 @@ RC1STA.4 = 1    ; CREN = 1       enable the serial port receiver
 RX2PPS = $10    ; pin select RX2 is RC0
 RC1PPS = $0f    ; pin select TX2 is RC1 as output
 #endif
-TX2STA = $20    ; TX9 = 0, TXEN = 1, SYNC = 0, BRGH = 0
-BAUD2CON = $00  ; SCKP = 0, BRG16 = 0   
+TX2STA = $24    ; TX9 = 0, TXEN = 1, SYNC = 0, BRGH = 1
+BAUD2CON = $08  ; SCKP = 0, BRG16 = 1   
 SP2BRGH = 0
-SP2BRGL = 29    ; SP2RGH:SP2BRGL = ((OSC * 1000000) / (64 * 16500)) - 1
+SP2BRGL = 68    ; SP2RGH:SP2BRGL = ((OSC * 1000000) / (4 * 115200)) - 1
                 ;    OSC = 32
-                ;    64 is divisor chosen by SYNC, BRGH and BRG16
+                ;    4 is divisor chosen by SYNC, BRGH and BRG16
                 ;    16500 is the desired baud rate
 
 while PIR3.7    ; read receive register until receive interrupt disappears
