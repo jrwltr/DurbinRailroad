@@ -260,7 +260,7 @@ EEPROM_BYTES    con 16384
 ;
 #if __PROCESSOR__ = "18F13K22"
 TXSTA = $24     ; TX9 = 0, TXEN = 1, SYNC = 0, BRGH = 1
-BAUDCON = $80   ; SCKP = 0, BRG16 = 1   
+BAUDCON = $08   ; SCKP = 0, BRG16 = 1   
 SPBRGH = 0
 SPBRG = 33      ; SPRGH:SPBRG = ((OSC * 1000000) / (4 * 115200)) - 1
                 ;    OSC = 16
