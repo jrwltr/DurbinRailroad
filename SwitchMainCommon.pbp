@@ -7,6 +7,8 @@
 #define DO_EEPROM
 #define DO_SWITCH_CONTROLLER
 
+;#define DEBUG_485_PACKETS
+
 ;=============================================================================
 
 CLEAR       ; zero all variables
@@ -87,6 +89,11 @@ update_display:
         endif
         gosub display_clear_to_end_of_line
 
+#ifdef DEBUG_485_PACKETS
+#ifdef DO_RS485
+        gosub rs485_display_stats
+#endif
+#else
         DisplayRow = 1
         DisplayCol = 0
         gosub display_set_cursor
@@ -95,6 +102,7 @@ update_display:
             gosub display_write_string
         endif
         gosub display_clear_to_end_of_line
+#endif
     else
         ; route edit mode
         if route_num_switches = 0 then
