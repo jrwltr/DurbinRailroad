@@ -58,7 +58,6 @@ rs485_transmit:
     rs485_need_ack = 1
 rs485_tx_retry:
     RS485_TXE = 1
-    pause 100;????
     if rs485_tx_len = 0 then
         rs485_tx_opcode.6 = 0
         rs485_tx_opcode.5 = 0
@@ -115,8 +114,8 @@ rs485_tx_retry:
     gosub rs485_wait_tx_empty
     RS485_TXREG = rs485_tx_checksum ^ $ff
 
-    ;pause 2 milliseconds to be sure all the data is out before disabling the transmitter
-    pause 2
+    ;pause 20 microseconds to be sure all the data is out before disabling the transmitter
+    pauseus 20
     RS485_TXE = 0
     return
 
