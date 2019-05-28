@@ -281,6 +281,7 @@ RCSTA.4 = 1     ; CREN = 1       enable the serial port receiver
 RS485_TXE       var PORTA.4
 RS485_TXREG     var TXREG
 RS485_TXIF      var PIR1.4
+RS485_TRMT      var TXSTA.1
 
 #endif
 #endif
@@ -347,6 +348,7 @@ RC2STA.4 = 1    ; CREN = 1       enable the serial port receiver
 RS485_TXE       var PORTC.2
 RS485_TXREG     var TX2REG
 RS485_TXIF      var PIR3.6
+RS485_TRMT      var TX2STA.1
 
 #endif
 #endif

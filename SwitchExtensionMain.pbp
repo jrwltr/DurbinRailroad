@@ -3,8 +3,8 @@
 #define DO_RS485
 #define DO_LED
 
-;#define DEBUG_485_PACKETS
-;#define DO_DISPLAY
+#define DEBUG_485_PACKETS
+#define DO_DISPLAY
 
 ;=============================================================================
 

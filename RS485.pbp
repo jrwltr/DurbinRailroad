@@ -33,7 +33,7 @@ rs485_display_stats:
     DisplayRow = DISPLAY_ROWS - 1
     DisplayCol = 0
     gosub display_set_cursor
-    ARRAYWRITE DisplayString, [hex2 rs485_max_retries, "-", hex2 rs485_total_retries, ">", rs485_total_rx_pkts, "<", rs485_total_tx_pkts, " ", rs485_chksum_errors, 0 ]
+    ARRAYWRITE DisplayString, [hex2 rs485_max_retries, "-", hex2 rs485_total_retries, ">", hex2 rs485_total_rx_pkts, "<", hex2 rs485_total_tx_pkts, " ", hex2 rs485_chksum_errors, 0 ]
     gosub display_write_string
     goto display_clear_to_end_of_line
 
@@ -114,8 +114,10 @@ rs485_tx_retry:
     gosub rs485_wait_tx_empty
     RS485_TXREG = rs485_tx_checksum ^ $ff
 
-    ;pause 20 microseconds to be sure all the data is out before disabling the transmitter
-    pauseus 20
+    ;wait for transmit shift register empty before disabling TX drive
+    while RS485_TRMT = 0
+    wend
+
     RS485_TXE = 0
     return
 
