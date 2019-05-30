@@ -17,7 +17,7 @@ rs485_tx_data       var byte[RS485_PACKET_LEN]
 rs485_tx_len        var byte                      ; number of bytes in rs485_tx_data
 rs485_tx_checksum   var byte                      ; checksum accumulation when transmitting a packet
 rs485_tx_sequence   var byte
-rs485_need_ack      var bit
+rs485_need_ack      var byte
 rs485_tx_retries    var byte
     RS485_RETRIES   con 10
 
@@ -33,9 +33,14 @@ rs485_display_stats:
     DisplayRow = DISPLAY_ROWS - 1
     DisplayCol = 0
     gosub display_set_cursor
-    ARRAYWRITE DisplayString, [hex2 rs485_max_retries, "-", hex2 rs485_total_retries, ">", hex2 rs485_total_rx_pkts, "<", hex2 rs485_total_tx_pkts, " ", hex2 rs485_chksum_errors, 0 ]
+    ARRAYWRITE DisplayString, [hex2 rs485_max_retries, "-", hex2 rs485_total_retries, 0]
+    gosub display_write_string
+    ARRAYWRITE DisplayString, [">", hex2 rs485_total_rx_pkts, "<", hex2 rs485_total_tx_pkts, 0]
+    gosub display_write_string
+    ARRAYWRITE DisplayString, [" ", hex2 rs485_chksum_errors, 0 ]
     gosub display_write_string
     goto display_clear_to_end_of_line
+    return
 
 #endif
 
@@ -114,6 +119,8 @@ rs485_tx_retry:
     gosub rs485_wait_tx_empty
     RS485_TXREG = rs485_tx_checksum ^ $ff
 
+    ; wait for last character to be transfered to the transmit shift register
+    gosub rs485_wait_tx_empty
     ;wait for transmit shift register empty before disabling TX drive
     while RS485_TRMT = 0
     wend
@@ -159,7 +166,7 @@ rs485_send_ACK:
     rs485_tx_data[1] = my_address
     rs485_tx_data[2] = ack_sequence
     rs485_tx_len = 3
-    goto rs485_transmit
+    goto rs485_tx_retry
 
 ;=============================================================================
 ; rs485_receive: receive state machine for Loconet packets, called after 
@@ -210,13 +217,13 @@ rs485_receive:
                     rs485_rx_opcode = rs485_rx_opcode & $9f ; remove length bits
                     if rs485_rx_checksum = $ff then
                         ; valid packet received
-#ifdef DEBUG_485_PACKETS
-                        if rs485_total_rx_pkts < $ff then
-                            display_update_needed = 1
-                            rs485_total_rx_pkts = rs485_total_rx_pkts + 1
-                        endif
-#endif
                         if (rs485_rx_packet[0] = my_address) then
+#ifdef DEBUG_485_PACKETS
+                            if rs485_total_rx_pkts < $ff then
+                                display_update_needed = 1
+                                rs485_total_rx_pkts = rs485_total_rx_pkts + 1
+                            endif
+#endif
                             if (rs485_rx_opcode != OPC_ACK) then
                                 ack_address = rs485_rx_packet[1]
                                 ack_sequence = rs485_rx_packet[2]
@@ -265,7 +272,14 @@ rs485_receive:
         rs485_rx_head = rs485_rx_head + 1
         if rs485_rx_head = RXFIFO_SIZE then rs485_rx_head = 0
     wend
-    if rs485_need_ack then 
+    return
+
+;=============================================================================
+rs485_retry_check:
+    ; allow one timer tick to go by before checking retries, provides a little randomness
+    if rs485_need_ack = 1 then
+        rs485_need_ack = 2
+    elseif rs485_need_ack then 
         if rs485_tx_retries then
             rs485_tx_retries = rs485_tx_retries - 1
 #ifdef DEBUG_485_PACKETS

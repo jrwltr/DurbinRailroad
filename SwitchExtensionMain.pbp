@@ -3,8 +3,8 @@
 #define DO_RS485
 #define DO_LED
 
-#define DEBUG_485_PACKETS
-#define DO_DISPLAY
+;#define DEBUG_485_PACKETS
+;#define DO_DISPLAY
 
 ;=============================================================================
 
@@ -38,7 +38,7 @@ update_display:
     DisplayRow = 0
     DisplayCol = 0
     gosub display_set_cursor
-    ARRAYWRITE DisplayString, ["ADDR:", hex my_address, " ", 0 ]
+    ARRAYWRITE DisplayString, ["ADDR:", hex my_address, 0 ]
     gosub display_write_string
     gosub display_clear_to_end_of_line
 #ifdef DEBUG_485_PACKETS

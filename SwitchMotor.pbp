@@ -25,10 +25,9 @@ switch_bank_write_from_eeprom:
 ;=============================================================================
 bval var byte
 switch_bank_write:
-    i2c_addr = (switch_bank // BANKS_PER_INTERFACE) << 1
+    i2c_addr = PCF8574_I2C_ADDRESS + ((switch_bank // BANKS_PER_INTERFACE) << 1)
+    bval = switch_bank_value & $ff
     if (switch_bank / BANKS_PER_INTERFACE) = 0 then
-        bval = switch_bank_value & $ff
-        i2c_addr = i2c_addr + PCF8574_I2C_ADDRESS 
         I2CWRITE SW0_INTERFACE_I2C_DATA, SW0_INTERFACE_I2C_CLK, i2c_addr, [ bval ], i2c_write_error
         pause 10
         bval = ((switch_bank_value >> 8) & $3) | $fc
@@ -37,8 +36,14 @@ switch_bank_write:
         pause 10
 #ifndef DO_DEVELOPMENT_BOARD
     else
-        bval = switch_bank_value & $ff
-        i2c_addr = i2c_addr + PCF8574_I2C_ADDRESS 
+#ifdef DO_SWITCH_EXTENSION
+#ifdef DO_DISPLAY
+        if i2c_addr = DISPLAY_I2C_ADDRESS then
+            ; don't allow collision with display I2C address
+            goto i2c_write_error
+        endif
+#endif
+#endif
         I2CWRITE SW1_INTERFACE_I2C_DATA, SW1_INTERFACE_I2C_CLK, i2c_addr, [ bval ], i2c_write_error
         pause 10
         bval = ((switch_bank_value >> 8) & $3) | $fc
@@ -193,6 +198,14 @@ switch_motor_button_check:
                     I2CREAD SW0_INTERFACE_I2C_DATA, SW0_INTERFACE_I2C_CLK, i2c_addr, [ i2c_read_value ], i2c_read_error
 #ifndef DO_DEVELOPMENT_BOARD
                 elseif interface_index = 1 then
+#ifdef DO_SWITCH_EXTENSION
+#ifdef DO_DISPLAY
+                    if i2c_addr = DISPLAY_I2C_ADDRESS then
+                        ; don't allow collision with display I2C address
+                        goto i2c_read_error
+                    endif
+#endif
+#endif
                     I2CREAD SW1_INTERFACE_I2C_DATA, SW1_INTERFACE_I2C_CLK, i2c_addr, [ i2c_read_value ], i2c_read_error
 #endif
                 endif
