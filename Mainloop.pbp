@@ -16,14 +16,8 @@ GLOBAL_INTERRUPT_ENABLE = 1
 display_update_needed = 1
 #endif
 
-mainloop:
-#ifdef DO_DISPLAY
-    if display_update_needed then 
-        gosub update_display
-        display_update_needed = 0
-    endif
-#endif
 
+mainloop:
 #ifdef DO_LOCONET
     ; check to see if any Loconet data has been received
     gosub loconet_receive
@@ -60,6 +54,13 @@ mainloop:
     GLOBAL_INTERRUPT_ENABLE = 1
     if InterruptState then
         gosub HalfSecondTimerExpired
+    endif
+#endif
+
+#ifdef DO_DISPLAY
+    if display_update_needed then 
+        gosub update_display
+        display_update_needed = 0
     endif
 #endif
 

@@ -51,8 +51,8 @@ loconet_transmit:
 ;   the interrupt routine detects received data
 ;
 loconet_receive:
-    while rx_head != rx_tail 
-        rx_byte = rx_data_fifo[rx_head]
+    while loconet_rx_head != loconet_rx_tail 
+        rx_byte = loconet_rx_data_fifo[loconet_rx_head]
 #ifdef SHOW_RX_DATA
         if (DisplayRow != DISPLAY_ROWS-1) or (DisplayCol >= DISPLAY_COLUMNS-3) then
             DisplayRow = DISPLAY_ROWS-1
@@ -116,8 +116,8 @@ loconet_receive:
                 rx_state = RX_STATE_ACCUMULATING_DATA
             endif
         endif
-        rx_head = rx_head + 1
-        if rx_head = RXFIFO_SIZE then rx_head = 0
+        loconet_rx_head = loconet_rx_head + 1
+        if loconet_rx_head = LOCONET_RXFIFO_SIZE then loconet_rx_head = 0
     wend
     return
 

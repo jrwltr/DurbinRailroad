@@ -29,11 +29,9 @@ switch_bank_write:
     bval = switch_bank_value & $ff
     if (switch_bank / BANKS_PER_INTERFACE) = 0 then
         I2CWRITE SW0_INTERFACE_I2C_DATA, SW0_INTERFACE_I2C_CLK, i2c_addr, [ bval ], i2c_write_error
-        pause 10
         bval = ((switch_bank_value >> 8) & $3) | $fc
         i2c_addr = i2c_addr - PCF8574_I2C_ADDRESS + PCF8574A_I2C_ADDRESS 
         I2CWRITE SW0_INTERFACE_I2C_DATA, SW0_INTERFACE_I2C_CLK, i2c_addr, [ bval ], i2c_write_error
-        pause 10
 #ifndef DO_DEVELOPMENT_BOARD
     else
 #ifdef DO_SWITCH_EXTENSION
@@ -45,11 +43,9 @@ switch_bank_write:
 #endif
 #endif
         I2CWRITE SW1_INTERFACE_I2C_DATA, SW1_INTERFACE_I2C_CLK, i2c_addr, [ bval ], i2c_write_error
-        pause 10
         bval = ((switch_bank_value >> 8) & $3) | $fc
         i2c_addr = i2c_addr - PCF8574_I2C_ADDRESS + PCF8574A_I2C_ADDRESS 
         I2CWRITE SW1_INTERFACE_I2C_DATA, SW1_INTERFACE_I2C_CLK, i2c_addr, [ bval ], i2c_write_error
-        pause 10
 #endif
     endif
 i2c_write_error:

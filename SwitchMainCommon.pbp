@@ -7,7 +7,7 @@
 #define DO_EEPROM
 #define DO_SWITCH_CONTROLLER
 
-#define DEBUG_485_PACKETS
+#define DEBUG_485_PACKETS   ;????
 
 ;=============================================================================
 
@@ -28,7 +28,7 @@ operate_mode        var byte
 ;=============================================================================
 switch_not_defined  var bit[1]
 
-display_update_needed  var bit
+display_update_needed   var bit
 
 ;=============================================================================
 #ifdef DO_LED
@@ -89,11 +89,6 @@ update_display:
         endif
         gosub display_clear_to_end_of_line
 
-#ifdef DEBUG_485_PACKETS
-#ifdef DO_RS485
-        gosub rs485_display_stats
-#endif
-#else
         DisplayRow = 1
         DisplayCol = 0
         gosub display_set_cursor
@@ -102,7 +97,6 @@ update_display:
             gosub display_write_string
         endif
         gosub display_clear_to_end_of_line
-#endif
     else
         ; route edit mode
         if route_num_switches = 0 then
@@ -195,6 +189,14 @@ button_3_pressed:
 button_4_pressed:
     if operate_mode = MODE_ROUTE_EDIT then
         goto route_no_key
+#ifdef DO_RS485
+#ifdef DEBUG_485_PACKETS
+    else
+        gosub rs485_display_stats
+        gosub button_cancel_repeat
+        display_update_needed = 0
+#endif
+#endif
     endif
     return
 

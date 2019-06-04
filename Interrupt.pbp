@@ -1,14 +1,15 @@
 ;=============================================================================
-RXFIFO_SIZE con 16
+LOCONET_RXFIFO_SIZE con 16
+RS485_RXFIFO_SIZE   con 24
 
 #ifdef DO_LOCONET
-rx_data_fifo        var byte[RXFIFO_SIZE] bank0 SYSTEM
-rx_head             var byte bank0 SYSTEM
-rx_tail             var byte bank0 SYSTEM
+loconet_rx_data_fifo    var byte[LOCONET_RXFIFO_SIZE] bank0 SYSTEM
+loconet_rx_head         var byte bank0 SYSTEM
+loconet_rx_tail         var byte bank0 SYSTEM
 #endif
 
 #ifdef DO_RS485
-rs485_rx_data_fifo  var byte[RXFIFO_SIZE] bank0 SYSTEM
+rs485_rx_data_fifo  var byte[RS485_RXFIFO_SIZE] bank0 SYSTEM
 rs485_rx_head       var byte bank0 SYSTEM
 rs485_rx_tail       var byte bank0 SYSTEM
 #endif
@@ -100,7 +101,7 @@ ENDASM
 
 ;=============================================================================
 ASM
-CheckReceiveInterrupt   macro PIR, RC_IF, RC_STA, RC_REG, data_fifo, rx_head, rx_tail
+CheckReceiveInterrupt   macro PIR, RC_IF, RC_STA, RC_REG, data_fifo, rx_head, rx_tail, FIFO_SIZE
     local rcv1
     local rcv2
     local rcv3
@@ -146,8 +147,8 @@ rcv4:                                       ;         else
     movf    rx_tail, W                      ;
     addlw   1                               ;
     movwf   rx_tail                         ;             rx_tail = rx_tail + 1
-    sublw   _RXFIFO_SIZE                    ;
-    btfss   STATUS, 2                       ;             if rx_tail == RXFIFO_SIZE
+    sublw   FIFO_SIZE                       ;
+    btfss   STATUS, 2                       ;             if rx_tail == FIFO_SIZE
     bra     rcv5                            ;
     movlw   0                               ;
     movwf   rx_tail                         ;                 rx_tail = 0
@@ -174,7 +175,7 @@ ENDASM
 #else
 ASM
 CheckLoconetReceiveInterrupt macro
-    CheckReceiveInterrupt   PIR3, 5, RC1STA, RC1REG, rx_data_fifo,      rx_head,        rx_tail
+    CheckReceiveInterrupt   PIR3, 5, RC1STA, RC1REG, loconet_rx_data_fifo,      loconet_rx_head,        loconet_rx_tail,      _LOCONET_RXFIFO_SIZE
     endm
 ENDASM
 #endif
@@ -190,13 +191,13 @@ ENDASM
 #if __PROCESSOR__ = "18F13K22"
 ASM
 CheckRS485ReceiveInterrupt macro
-    CheckReceiveInterrupt   PIR1, 5, RCSTA,  RCREG,  rs485_rx_data_fifo, rs485_rx_head, rs485_rx_tail
+    CheckReceiveInterrupt   PIR1, 5, RCSTA,  RCREG,  rs485_rx_data_fifo, rs485_rx_head, rs485_rx_tail, _RS485_RXFIFO_SIZE
     endm
 ENDASM
 #else
 ASM
 CheckRS485ReceiveInterrupt macro
-    CheckReceiveInterrupt   PIR3, 7, RC2STA, RC2REG, rs485_rx_data_fifo, rs485_rx_head, rs485_rx_tail
+    CheckReceiveInterrupt   PIR3, 7, RC2STA, RC2REG, rs485_rx_data_fifo, rs485_rx_head, rs485_rx_tail, _RS485_RXFIFO_SIZE
     endm
 ENDASM
 #endif
@@ -213,16 +214,16 @@ define INTHAND  isr
 ASM
 isr:
     InterruptEntry
-;following debug lines toggle PORTC.3 on every interrupt
+;following debug lines toggle PORTC.1 on every interrupt
 ;    banksel LATC
-;    movlw   8
+;    movlw   1
 ;    xorwf   LATC, 1
     CheckLoconetReceiveInterrupt
     CheckRS485ReceiveInterrupt
     CheckTimerTick
     CheckTurntableTimer
     InterruptExit
-    retfie
+    retfie 1
 ENDASM
 
 ;=============================================================================

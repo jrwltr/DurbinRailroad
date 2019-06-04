@@ -3,9 +3,6 @@
 #define DO_RS485
 #define DO_LED
 
-;#define DEBUG_485_PACKETS
-;#define DO_DISPLAY
-
 ;=============================================================================
 
 CLEAR       ; zero all variables
@@ -18,11 +15,6 @@ INCLUDE "Interrupt.pbp"
 
 ;=============================================================================
 
-#ifdef DO_DISPLAY
-display_update_needed  var bit
-#endif
-
-;=============================================================================
 INCLUDE "LED.pbp"
 #ifdef DO_DISPLAY
 INCLUDE "LCD4X20.pbp"
@@ -31,21 +23,6 @@ INCLUDE "LOCONET.inc"
 INCLUDE "SwitchMotor.inc"
 INCLUDE "SwitchMotor.pbp"
 INCLUDE "RS485.pbp"
-
-;=============================================================================
-#ifdef DO_DISPLAY
-update_display:
-    DisplayRow = 0
-    DisplayCol = 0
-    gosub display_set_cursor
-    ARRAYWRITE DisplayString, ["ADDR:", hex my_address, 0 ]
-    gosub display_write_string
-    gosub display_clear_to_end_of_line
-#ifdef DEBUG_485_PACKETS
-    gosub rs485_display_stats
-#endif
-    return
-#endif
 
 ;=============================================================================
 init:

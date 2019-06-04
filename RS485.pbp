@@ -1,5 +1,5 @@
 ;=============================================================================
-RS485_PACKET_LEN   con 6
+RS485_PACKET_LEN   con 7
 
 ;=============================================================================
 rs485_rx_byte             var byte                ; last byte taken from receive FIFO
@@ -17,7 +17,6 @@ rs485_tx_data       var byte[RS485_PACKET_LEN]
 rs485_tx_len        var byte                      ; number of bytes in rs485_tx_data
 rs485_tx_checksum   var byte                      ; checksum accumulation when transmitting a packet
 rs485_tx_sequence   var byte
-rs485_need_ack      var byte
 rs485_tx_retries    var byte
     RS485_RETRIES   con 10
 
@@ -54,22 +53,20 @@ rs485_wait_tx_empty:
     
 rs485_transmit:
 #ifdef DEBUG_485_PACKETS
-    if rs485_total_tx_pkts < $ff then
-        display_update_needed = 1
+    if (rs485_total_tx_pkts < $ff) then
         rs485_total_tx_pkts = rs485_total_tx_pkts + 1
     endif
 #endif
     rs485_tx_retries = RS485_RETRIES
-    rs485_need_ack = 1
 rs485_tx_retry:
     RS485_TXE = 1
-    if rs485_tx_len = 0 then
+    if (rs485_tx_len = 0) then
         rs485_tx_opcode.6 = 0
         rs485_tx_opcode.5 = 0
-    elseif rs485_tx_len = 1 then
+    elseif (rs485_tx_len = 1) then
         rs485_tx_opcode.6 = 0
         rs485_tx_opcode.5 = 1
-    elseif rs485_tx_len = 4 then
+    elseif (rs485_tx_len = 4) then
         rs485_tx_opcode.6 = 1
         rs485_tx_opcode.5 = 0
     else
@@ -87,7 +84,7 @@ rs485_tx_retry:
     ARRAYWRITE DisplayString, [hex2 rs485_tx_opcode, ":", 0 ]
     gosub display_write_string
     for ii = 0 to rs485_tx_len - 1
-        if ii = 6 then exit
+        if (ii = 6) then exit
         ARRAYWRITE DisplayString, [hex2 rs485_tx_data[ii], 0 ]
         gosub display_write_string
     next ii
@@ -102,7 +99,7 @@ rs485_tx_retry:
     rs485_tx_checksum = rs485_tx_opcode
 
     ; send the packet length if necessary
-    if rs485_tx_opcode.6 and rs485_tx_opcode.5 then
+    if (rs485_tx_opcode.6 and rs485_tx_opcode.5) then
         gosub rs485_wait_tx_empty
         RS485_TXREG = rs485_tx_len + 1 ; +1 for checksum
         rs485_tx_checksum = rs485_tx_checksum ^ (rs485_tx_len+1) ; +1 for checksum
@@ -184,12 +181,12 @@ rs485_receive:
         ARRAYWRITE DisplayString, [hex2 rs485_rx_byte, 0]
         gosub display_write_string
 #endif
-        if rs485_rx_byte.7 then
+        if (rs485_rx_byte.7) then
             ; found an opcode
             rs485_rx_opcode = rs485_rx_byte
             rs485_rx_checksum = rs485_rx_byte
-            if rs485_rx_byte.6 then
-                if rs485_rx_byte.5 then
+            if (rs485_rx_byte.6) then
+                if (rs485_rx_byte.5) then
                     ; next recieved byte is packet length
                     rs485_rx_state = RX_STATE_WAITING_FOR_LENGTH
                 else
@@ -197,7 +194,7 @@ rs485_receive:
                     rs485_rx_state = RX_STATE_ACCUMULATING_DATA
                 endif
             else
-                if rs485_rx_byte.5 then
+                if (rs485_rx_byte.5) then
                     rs485_rx_packet_length = 3
                 else
                     rs485_rx_packet_length = 1
@@ -207,20 +204,19 @@ rs485_receive:
             rs485_rx_packet_index = 0
         else
             rs485_rx_checksum = rs485_rx_checksum ^ rs485_rx_byte
-            if rs485_rx_state = RX_STATE_WAITING_FOR_LENGTH then
+            if (rs485_rx_state = RX_STATE_WAITING_FOR_LENGTH) then
                 rs485_rx_packet_length = rs485_rx_byte
                 rs485_rx_state = RX_STATE_ACCUMULATING_DATA
-            elseif rs485_rx_state = RX_STATE_ACCUMULATING_DATA then
+            elseif (rs485_rx_state = RX_STATE_ACCUMULATING_DATA) then
                 rs485_rx_packet_length = rs485_rx_packet_length - 1
-                if rs485_rx_packet_length = 0 then
+                if (rs485_rx_packet_length = 0) then
                     rs485_rx_state = RX_STATE_WAITING_FOR_OPCODE
                     rs485_rx_opcode = rs485_rx_opcode & $9f ; remove length bits
-                    if rs485_rx_checksum = $ff then
+                    if (rs485_rx_checksum = $ff) then
                         ; valid packet received
                         if (rs485_rx_packet[0] = my_address) then
 #ifdef DEBUG_485_PACKETS
-                            if rs485_total_rx_pkts < $ff then
-                                display_update_needed = 1
+                            if (rs485_total_rx_pkts < $ff) then
                                 rs485_total_rx_pkts = rs485_total_rx_pkts + 1
                             endif
 #endif
@@ -230,13 +226,12 @@ rs485_receive:
                                 gosub rs485_send_ACK
                             endif
                             if (rs485_rx_opcode = OPC_ACK) then
-                                if rs485_tx_data[2] = rs485_tx_sequence then
-                                    rs485_need_ack = 0
+                                if (rs485_tx_retries and (rs485_tx_data[2] = rs485_tx_sequence)) then
                                     rs485_tx_sequence = rs485_tx_sequence + 1
-                                    if rs485_tx_sequence & $80 then
+                                    if (rs485_tx_sequence & $80) then
                                         rs485_tx_sequence = 0
                                     endif
-                                    rs485_need_ack = 0
+                                    rs485_tx_retries = 0
                                 endif
 #ifdef DO_SWITCH_EXTENSION
                             elseif (rs485_rx_opcode = OPC_BANK_WRITE) then
@@ -255,46 +250,43 @@ rs485_receive:
                         endif
 #ifdef DEBUG_485_PACKETS
                     else
-                        if rs485_chksum_errors < $ff then
-                            display_update_needed = 1
+                        if (rs485_chksum_errors < $ff) then
                             rs485_chksum_errors = rs485_chksum_errors + 1
                         endif
 #endif
                     endif
                 else
-                    if rs485_rx_packet_index < RS485_PACKET_LEN then
+                    if (rs485_rx_packet_index < RS485_PACKET_LEN) then
                         rs485_rx_packet[rs485_rx_packet_index] = rs485_rx_byte
                         rs485_rx_packet_index = rs485_rx_packet_index + 1
                     endif
                 endif
             endif
         endif
+        PERIPHERAL_INTERRUPT_ENABLE = 0
         rs485_rx_head = rs485_rx_head + 1
-        if rs485_rx_head = RXFIFO_SIZE then rs485_rx_head = 0
+        if (rs485_rx_head = RS485_RXFIFO_SIZE) then rs485_rx_head = 0
+        PERIPHERAL_INTERRUPT_ENABLE = 1
     wend
     return
 
 ;=============================================================================
 rs485_retry_check:
-    ; allow one timer tick to go by before checking retries, provides a little randomness
-    if rs485_need_ack = 1 then
-        rs485_need_ack = 2
-    elseif rs485_need_ack then 
-        if rs485_tx_retries then
-            rs485_tx_retries = rs485_tx_retries - 1
+    if (rs485_tx_retries != 0) then
+        rs485_tx_retries = rs485_tx_retries - 1
+        ; don't retry on the first timer tick, this prevents quick retries if a 
+        ; timer tick happens shortly after transmitting a packet.  it also
+        ; provides a little retry randomness
+        if (rs485_tx_retries < (RS485_RETRIES - 1)) then
 #ifdef DEBUG_485_PACKETS
-            display_update_needed = 1
-            if rs485_total_retries < $ff then
+            if (rs485_total_retries < $ff) then
                 rs485_total_retries = rs485_total_retries + 1
             endif
-            if (RS485_RETRIES - rs485_tx_retries) > rs485_max_retries then
+            if ((RS485_RETRIES - rs485_tx_retries) > rs485_max_retries) then
                 rs485_max_retries = RS485_RETRIES - rs485_tx_retries
             endif
 #endif
             gosub rs485_tx_retry
-        else
-            ; retries exhaused
-            rs485_need_ack = 0
         endif
     endif
     return
