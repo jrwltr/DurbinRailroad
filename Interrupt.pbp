@@ -209,6 +209,29 @@ ENDASM
 #endif
 
 ;=============================================================================
+#if __PROCESSOR__ = "18F13K22"
+ASM
+ReturnFromInterrupt macro
+    retfie  1
+    endm
+ENDASM
+#endif
+#if __PROCESSOR__ = "16F19156"
+ASM
+ReturnFromInterrupt macro
+    retfie
+    endm
+ENDASM
+#endif
+#if __PROCESSOR__ = "16F18856"
+ASM
+ReturnFromInterrupt macro
+    retfie
+    endm
+ENDASM
+#endif
+
+;=============================================================================
 define INTHAND  isr
 
 ASM
@@ -223,7 +246,7 @@ isr:
     CheckTimerTick
     CheckTurntableTimer
     InterruptExit
-    retfie 1
+    ReturnFromInterrupt
 ENDASM
 
 ;=============================================================================
