@@ -102,7 +102,7 @@ update_display:
         if route_num_switches = 0 then
             ARRAYWRITE DisplayString, ["???=?", 0]
         else
-            ARRAYWRITE DisplayString, [(route_switches[route_switch_index] & $7fff)+1, 0]
+            ARRAYWRITE DisplayString, [dec ((route_switches[route_switch_index] & $7fff)+1), 0]
             gosub display_write_string
             if route_switches[route_switch_index] & $8000 then
                 ARRAYWRITE DisplayString, ["=T", 0]
