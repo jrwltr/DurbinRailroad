@@ -58,7 +58,7 @@ handle_switch_request:
     gosub switch_eeprom_find_translation
     
     if (operate_mode = MODE_ROUTE_EDIT) then
-        if (!switch_not_defined) then
+        if (switch_not_defined) then
             route_to_find = loconet_switch
             gosub route_eeprom_find
             if (route_found != ROUTE_NOT_FOUND) then
@@ -105,6 +105,7 @@ handle_switch_request:
                 gosub route_eeprom_read
                 if operate_mode = MODE_OPERATE then
                     gosub route_activate
+                    loconet_switch = route_to_find
                 endif
             else
                 route_number = ROUTE_NOT_FOUND

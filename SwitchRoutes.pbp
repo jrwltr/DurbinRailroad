@@ -38,7 +38,7 @@ route_activate:
                     switch_motor_state = SWITCH_MOTOR_CLOSED
                 endif
                 gosub switch_eeprom_write_switch_state
-                gosub switch_bank_write
+                gosub switch_bank_write_from_eeprom
             endif
         next kk
     endif

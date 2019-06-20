@@ -148,7 +148,7 @@ route_eeprom_read:
     ee_address = route_eeaddr + 2
     for route_num_switches = 0 to MAX_ROUTE_SWITCHES - 1
         gosub eeprom_read_word
-        if ee_word = $ff then
+        if ee_word = $ffff then
             exit
         endif
         route_switches[route_num_switches] = ee_word
