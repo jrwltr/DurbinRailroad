@@ -32,7 +32,6 @@ switch_bank_write:
         bval = ((switch_bank_value >> 8) & $3) | $fc
         i2c_addr = i2c_addr - PCF8574_I2C_ADDRESS + PCF8574A_I2C_ADDRESS 
         I2CWRITE SW0_INTERFACE_I2C_DATA, SW0_INTERFACE_I2C_CLK, i2c_addr, [ bval ], i2c_write_error
-#ifndef DO_DEVELOPMENT_BOARD
     else
 #ifdef DO_SWITCH_EXTENSION
 #ifdef DO_DISPLAY
@@ -46,7 +45,6 @@ switch_bank_write:
         bval = ((switch_bank_value >> 8) & $3) | $fc
         i2c_addr = i2c_addr - PCF8574_I2C_ADDRESS + PCF8574A_I2C_ADDRESS 
         I2CWRITE SW1_INTERFACE_I2C_DATA, SW1_INTERFACE_I2C_CLK, i2c_addr, [ bval ], i2c_write_error
-#endif
     endif
 i2c_write_error:
     return
@@ -181,10 +179,8 @@ switch_motor_button_check:
         debounce = interface_debounce[interface_index] << 1
         if     ((interface_index = 0) && (SWITCH_MOTOR_INTERFACE0_INTERRUPT = 0)) then 
             debounce = debounce | 1
-#ifndef DO_DEVELOPMENT_BOARD
         elseif ((interface_index = 1) && (SWITCH_MOTOR_INTERFACE1_INTERRUPT = 0)) then
             debounce = debounce | 1
-#endif
         endif
         interface_debounce[interface_index] = debounce
         if debounce = $ff then
@@ -193,7 +189,6 @@ switch_motor_button_check:
                 i2c_addr = PCF8574A_I2C_ADDRESS + (bank_index << 1)
                 if interface_index = 0 then
                     I2CREAD SW0_INTERFACE_I2C_DATA, SW0_INTERFACE_I2C_CLK, i2c_addr, [ i2c_read_value ], i2c_read_error
-#ifndef DO_DEVELOPMENT_BOARD
                 elseif interface_index = 1 then
 #ifdef DO_SWITCH_EXTENSION
 #ifdef DO_DISPLAY
@@ -204,7 +199,6 @@ switch_motor_button_check:
 #endif
 #endif
                     I2CREAD SW1_INTERFACE_I2C_DATA, SW1_INTERFACE_I2C_CLK, i2c_addr, [ i2c_read_value ], i2c_read_error
-#endif
                 endif
                 i2c_read_value = (~i2c_read_value >> 3) & $1f
 #ifdef DO_SWITCH_EXTENSION

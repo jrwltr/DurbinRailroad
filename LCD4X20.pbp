@@ -7,7 +7,7 @@
 ; 8 bit accesses until the display can be set to 4 bit.
 ;=============================================================================
 
-#ifdef DO_DEVELOPMENT_BOARD
+#ifdef DO_4_LINE
 DISPLAY_ROWS    con 4
 DISPLAY_COLUMNS con 20
 #else
@@ -137,7 +137,7 @@ display_set_cursor:
 display_initialize:
 
     ;display_row_address contains the address in display memory where each row starts
-#ifdef DO_DEVELOPMENT_BOARD
+#ifdef DO_4_LINE
     ARRAYWRITE display_row_address, [ $0, $40, $14, $54 ]
 #else
     ARRAYWRITE display_row_address, [ $0, $40 ]

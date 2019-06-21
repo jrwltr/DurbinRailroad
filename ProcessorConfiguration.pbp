@@ -83,24 +83,19 @@ ANSELA = %00000000    'Set all pins for digital operation
 ANSELB = %00000000
 ANSELC = %00000000
 #endif
-#ifdef DO_DEVELOPMENT_BOARD
-TRISA  = %10001111    'Set PORTA bits 0, 1, 2, 3, 7 as inputs, the rest as outputs
-TRISB  = %01100000    'Set PORTB bits 5, 6 as inputs, the rest as outputs
-TRISC  = %10100011    'Set PORTC bits 0, 1, 5, 7 as inputs, the rest as outputs
-WPUA   = %10001111    'Set weak pullups on PORTA bits 0, 1, 2, 3 and 7, the rest as outputs
-#else
+
 #ifdef DO_SWITCH_EXTENSION
 TRISA  = %00000100    'Set PORTA bits 2 as inputs, the rest as outputs
 TRISB  = %00101111    'Set PORTB bits 0, 1, 2, 3, 5 as inputs, the rest as outputs
 TRISC  = %11111100    'Set PORTC bits 2, 3, 4, 5, 6, 7 as inputs, the rest as outputs
 WPUA   = %00000100    'Set weak pullups on PORTA bits 2, 5, the rest as outputs
 #endif
+
 #ifdef DO_SWITCH_CONTROLLER
 TRISA  = %00100100    'Set PORTA bits 2, 5 as inputs, the rest as outputs
 TRISB  = %00001111    'Set PORTB bits 0, 1, 2, 3 as inputs, the rest as outputs
 TRISC  = %10110001    'Set PORTC bits 0, 4, 5, 7 as inputs, the rest as outputs
 WPUA   = %00100100    'Set weak pullups on PORTA bits 2, 5, the rest as outputs
-#endif
 #endif
 
 #if __PROCESSOR__ = "16F19156"
@@ -111,22 +106,18 @@ RC4PPS = $14    ; pin select RC4 is RC4
 #endif
 
 ;=============================================================================
-#ifdef DO_DEVELOPMENT_BOARD
-    SCL1     var PORTC.3
-    SDA1     var PORTC.4
-    SCL2     var PORTA.4
-    SDA2     var PORTA.5
-#else
 #ifdef DO_TURNTABLE
     SCL      var PORTB.1
     SDA      var PORTC.0
 #endif
+
 #ifdef DO_SWITCH_EXTENSION
     SCL1     var PORTB.4
     SDA1     var PORTB.6
     SCL2     var PORTC.0
     SDA2     var PORTC.1
 #endif
+
 #ifdef DO_SWITCH_CONTROLLER
     SDA1     var PORTA.0
     SCL1     var PORTA.1
@@ -135,25 +126,15 @@ RC4PPS = $14    ; pin select RC4 is RC4
     SCL3     var PORTB.4
     SDA3     var PORTB.5
 #endif
-#endif
 
 #ifdef DO_SWITCHMOTOR
-#ifdef DO_DEVELOPMENT_BOARD
-    SW0_INTERFACE_I2C_CLK    var SCL1
-    SW0_INTERFACE_I2C_DATA   var SDA1
-#else
     SW0_INTERFACE_I2C_CLK    var SCL1
     SW0_INTERFACE_I2C_DATA   var SDA1
     SW1_INTERFACE_I2C_CLK    var SCL2
     SW1_INTERFACE_I2C_DATA   var SDA2
 #endif
-#endif
 
 #ifdef DO_EEPROM
-#ifdef DO_DEVELOPMENT_BOARD
-    EEPROM_I2C_CLK          var SCL2
-    EEPROM_I2C_DATA         var SDA2
-#else
 #ifdef DO_SWITCH_CONTROLLER
     EEPROM_I2C_CLK          var SCL3
     EEPROM_I2C_DATA         var SDA3
@@ -163,13 +144,8 @@ RC4PPS = $14    ; pin select RC4 is RC4
     EEPROM_I2C_DATA         var SDA
 #endif
 #endif
-#endif
 
 #ifdef DO_DISPLAY
-#ifdef DO_DEVELOPMENT_BOARD
-    DISPLAY_I2C_CLK         var SCL2
-    DISPLAY_I2C_DATA        var SDA2
-#else
 #ifdef DO_SWITCH_CONTROLLER
     DISPLAY_I2C_CLK         var SCL3
     DISPLAY_I2C_DATA        var SDA3
@@ -183,19 +159,14 @@ RC4PPS = $14    ; pin select RC4 is RC4
     DISPLAY_I2C_DATA        var SDA
 #endif
 #endif
-#endif
 
 ;=============================================================================
 #ifdef DO_OPERATE_PROGRAM
-#ifdef DO_DEVELOPMENT_BOARD
-    OperateProgramSwitch    var PORTC.1
-#else
 #ifdef DO_TURNTABLE
     OperateProgramSwitch    var PORTA.7
 #endif
 #ifdef DO_SWITCH_CONTROLLER
     OperateProgramSwitch    var PORTC.4
-#endif
 #endif
 #endif
 
@@ -217,22 +188,14 @@ EEPROM_BYTES    con 16384
 #endif
 
 ;=============================================================================
-#ifdef DO_DEVELOPMENT_BOARD
-    ONBOARD_SWITCHES    var PORTA   ; low 4 bits
-#else
 #ifdef DO_TURNTABLE
     ONBOARD_SWITCHES    var PORTC   ; low 4 bits
 #endif
 #ifdef DO_SWITCH_CONTROLLER
     ONBOARD_SWITCHES    var PORTB   ; low 4 bits
 #endif
-#endif
 
 ;=============================================================================
-#ifdef DO_DEVELOPMENT_BOARD
-    LED_COUNT   con 4
-    LED         var PORTB.1  ; treated as an array of bits LED[0]...LED[3]
-#endif
 #ifdef DO_SWITCH_EXTENSION
     LED_COUNT   con 1
     LED         var PORTA.5
@@ -240,9 +203,6 @@ EEPROM_BYTES    con 16384
 
 ;=============================================================================
 #ifdef DO_SWITCHMOTOR
-#ifdef DO_DEVELOPMENT_BOARD
-    SWITCH_MOTOR_INTERFACE0_INTERRUPT  var PORTC.5
-#else
 #ifdef DO_SWITCH_EXTENSION
     SWITCH_MOTOR_INTERFACE0_INTERRUPT  var PORTC.2
     SWITCH_MOTOR_INTERFACE1_INTERRUPT  var PORTA.2
@@ -250,7 +210,6 @@ EEPROM_BYTES    con 16384
 #ifdef DO_SWITCH_CONTROLLER
     SWITCH_MOTOR_INTERFACE0_INTERRUPT  var PORTA.2
     SWITCH_MOTOR_INTERFACE1_INTERRUPT  var PORTA.5
-#endif
 #endif
 #endif
 
@@ -383,14 +342,8 @@ T0CON0 = $80    ; T0CON0.T0EN = 1  enable timer 0
 
 #ifdef DO_TURNTABLE
 ;=============================================================================
-#ifdef DO_DEVELOPMENT_BOARD
-    TURNTABLE_XOR  var PORTA.6
-    TURNTABLE_DIR1 var PORTC.2
-    TURNTABLE_DIR2 var PORTB.0
-#else
-    TURNTABLE_DIR1 var PORTA.0
-    TURNTABLE_DIR2 var PORTA.1
-#endif
+TURNTABLE_DIR1 var PORTA.0
+TURNTABLE_DIR2 var PORTA.1
 
 ;=============================================================================
 ; initialize the DAC to control turntable speed
