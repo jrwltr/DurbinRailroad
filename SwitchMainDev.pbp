@@ -1,3 +1,0 @@
-#define DO_DEVELOPMENT_BOARD
-#define DO_LED
-INCLUDE "SwitchMainCommon.pbp"
