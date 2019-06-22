@@ -98,6 +98,13 @@ TRISC  = %10110001    'Set PORTC bits 0, 4, 5, 7 as inputs, the rest as outputs
 WPUA   = %00100100    'Set weak pullups on PORTA bits 2, 5, the rest as outputs
 #endif
 
+#ifdef DO_TURNTABLE
+TRISA  = %10110000    'Set PORTA bits 4, 5, 7 as inputs, the rest as outputs
+TRISB  = %00000000    'Set PORTB bits all outputs
+TRISC  = %10011111    'Set PORTC bits 0, 1, 2, 3, 4, 7 as inputs, the rest as outputs
+WPUA   = %10110000    'Set weak pullups on PORTA bits 4, 5, 7 the rest as outputs
+#endif
+
 #if __PROCESSOR__ = "16F19156"
 RB1PPS = $09    ; pin select RB1 is RB1
 RB2PPS = $0a    ; pin select RB2 is RB2
@@ -105,10 +112,13 @@ RB3PPS = $0b    ; pin select RB3 is RB3
 RC4PPS = $14    ; pin select RC4 is RC4
 #endif
 
+#if __PROCESSOR__ = "16F18856"
+#endif
+
 ;=============================================================================
 #ifdef DO_TURNTABLE
     SCL      var PORTB.1
-    SDA      var PORTC.0
+    SDA      var PORTB.0
 #endif
 
 #ifdef DO_SWITCH_EXTENSION
@@ -352,7 +362,7 @@ TURNTABLE_DAC   var DAC1CON1
 
 DAC1CON1 = 0
 DAC1CON0 = 0
-DAC1CON0.4 = 1   ; DAC1CON0.DACOE2 = 0    DAC is output to DACOUT2 pin
+DAC1CON0.5 = 1   ; DAC1CON0.DACOE1 = 1    DAC is output to DAC1OUT1 pin
 DAC1CON0.7 = 1   ; DAC1CON0.DACEN = 1     enable DAC 
 
 ;=============================================================================

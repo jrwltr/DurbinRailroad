@@ -136,7 +136,7 @@ turntable_stop:
     operate_mode = save_operate_mode
     display_update_needed = 1
 
-    if TURNTABLE_DIR1 = 0 and TURNTABLE_DIR2 = 0 then 
+    if (TURNTABLE_DIR1 = 0) and (TURNTABLE_DIR2 = 0) then 
         ; if already stopped, return
         ; this never happens
         return
