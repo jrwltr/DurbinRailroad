@@ -99,10 +99,10 @@ WPUA   = %00100100    'Set weak pullups on PORTA bits 2, 5, the rest as outputs
 #endif
 
 #ifdef DO_TURNTABLE
-TRISA  = %10110000    'Set PORTA bits 4, 5, 7 as inputs, the rest as outputs
+TRISA  = %10111000    'Set PORTA bits 3, 4, 5, 7 as inputs, the rest as outputs
 TRISB  = %00000000    'Set PORTB bits all outputs
 TRISC  = %10011111    'Set PORTC bits 0, 1, 2, 3, 4, 7 as inputs, the rest as outputs
-WPUA   = %10110000    'Set weak pullups on PORTA bits 4, 5, 7 the rest as outputs
+WPUA   = %10111000    'Set weak pullups on PORTA bits 4, 5, 7 the rest as outputs
 #endif
 
 #if __PROCESSOR__ = "16F19156"
@@ -352,8 +352,8 @@ T0CON0 = $80    ; T0CON0.T0EN = 1  enable timer 0
 
 #ifdef DO_TURNTABLE
 ;=============================================================================
-TURNTABLE_DIR1 var PORTA.0
-TURNTABLE_DIR2 var PORTA.1
+TT_DIR1 var LATA.0
+TT_DIR2 var LATA.1
 
 ;=============================================================================
 ; initialize the DAC to control turntable speed

@@ -89,14 +89,14 @@ turntable_goto_position:
 #ifdef DO_DEVELOPMENT_BOARD
         TURNTABLE_XOR  = 1 ;????
 #endif
-        TURNTABLE_DIR1 = 1
-        TURNTABLE_DIR2 = 0
+        TT_DIR1 = 0
+        TT_DIR2 = 1
     else
 #ifdef DO_DEVELOPMENT_BOARD
         TURNTABLE_XOR  = 0 ;????
 #endif
-        TURNTABLE_DIR1 = 0
-        TURNTABLE_DIR2 = 1
+        TT_DIR1 = 1
+        TT_DIR2 = 0
     endif
 
     gosub StartHalfSecondTimer
@@ -136,14 +136,14 @@ turntable_stop:
     operate_mode = save_operate_mode
     display_update_needed = 1
 
-    if (TURNTABLE_DIR1 = 0) and (TURNTABLE_DIR2 = 0) then 
+    if (TT_DIR1 = 0) and (TT_DIR2 = 0) then 
         ; if already stopped, return
         ; this never happens
         return
     endif
 
-    TURNTABLE_DIR1 = 0     ; stop the turntable
-    TURNTABLE_DIR2 = 0     ;
+    TT_DIR1 = 0     ; stop the turntable
+    TT_DIR2 = 0     ;
     TURNTABLE_DAC = 0
 
     ; if the turntable is moving at full speed, it will keep moving for up to 500 milliseconds
@@ -153,7 +153,7 @@ turntable_stop:
     TURNTABLE_COUNTER_ENABLE = 0
 
     gosub ReadTurntableCounter 
-    if TURNTABLE_DIR1 = 1 then
+    if Clockwise then
         ; clockwise, current_tt_loc = current_tt_loc + TTCounter
         long_addend1[0] = current_tt_loc[0]
         long_addend1[1] = current_tt_loc[1]
@@ -331,8 +331,8 @@ turntable_set_translation:
 
 ;=============================================================================
 turntable_initialize:
-    TURNTABLE_DIR1 = 0
-    TURNTABLE_DIR2 = 0
+    TT_DIR1 = 0
+    TT_DIR2 = 0
     TURNTABLE_DAC = 0
 
     ; RampDownCounts contains the number of turntable counts it will take
