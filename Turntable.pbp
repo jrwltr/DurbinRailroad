@@ -86,15 +86,11 @@ turntable_goto_position:
 
     ; set the direction
     if Clockwise then
-#ifdef DO_DEVELOPMENT_BOARD
-        TURNTABLE_XOR  = 1 ;????
-#endif
+        TURNTABLE_XOR  = 1
         TT_DIR1 = 0
         TT_DIR2 = 1
     else
-#ifdef DO_DEVELOPMENT_BOARD
-        TURNTABLE_XOR  = 0 ;????
-#endif
+        TURNTABLE_XOR  = 0
         TT_DIR1 = 1
         TT_DIR2 = 0
     endif

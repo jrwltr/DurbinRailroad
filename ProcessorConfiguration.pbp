@@ -99,7 +99,7 @@ WPUA   = %00100100    'Set weak pullups on PORTA bits 2, 5, the rest as outputs
 #endif
 
 #ifdef DO_TURNTABLE
-TRISA  = %10111000    'Set PORTA bits 3, 4, 5, 7 as inputs, the rest as outputs
+TRISA  = %10101000    'Set PORTA bits 3, 5, 7 as inputs, the rest as outputs
 TRISB  = %00000000    'Set PORTB bits all outputs
 TRISC  = %10011111    'Set PORTC bits 0, 1, 2, 3, 4, 7 as inputs, the rest as outputs
 WPUA   = %10111000    'Set weak pullups on PORTA bits 4, 5, 7 the rest as outputs
@@ -359,6 +359,7 @@ TT_DIR2 var LATA.1
 ; initialize the DAC to control turntable speed
 
 TURNTABLE_DAC   var DAC1CON1
+TURNTABLE_XOR   var PORTC.5
 
 DAC1CON1 = 0
 DAC1CON0 = 0
@@ -412,8 +413,8 @@ TURNTABLE_COUNTER_ENABLE            var T1CON.0 ; T1CON.TMR1ON
 TURNTABLE_COUNTER_INTERRUPT_FLAG    var PIR4.0  ; PIR4.TMR1IF
 
 ; initialize timer 1
-TRISC.0 = 1     ; RC0 is input
 T1GCON = 0      ; disable Timer1 gate control
+T1CKIPPS = $05  ; T1CKI is RA5
 T1CON = $84     ; clock source is T1CKI, prescale = 1:1, don't synchronize
 
 goto skip_funcs_2
@@ -444,6 +445,25 @@ ReadTurntableCounter:
 skip_funcs_2:
 
 ;=============================================================================
+CLC1CON = $00       ; disable CLC
+
+CLCIN0PPS = $03		; CLCIN0PPS is RA3
+CLCIN1PPS = $14		; CLCIN1PPS is RC4
+RA4PPS    = $01     ; RA4 is CLC1OUT
+
+;Select desired PPS inputs into CLC1:
+CLC1SEL0 = $00		; Selects CLCIN0PPS (RA3)
+CLC1SEL1 = $01		; Selects CLCIN1PPS (RC4)
+
+;Enable chosen inputs to CLC1 
+CLC1GLS0 = $02		; Enables RA3 into the OR-XOR logic from gate 1
+CLC1GLS2 = $08		; Enables RC4 into the OR-XOR logic from gate 3
+
+;Setup both input gate and function output polarities:
+CLC1POL = $00		; No polarity inversions
+
+;Enable the CLC:
+CLC1CON = $81		; XOR function selected and enabled
 
 #endif
 
