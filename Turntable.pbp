@@ -14,6 +14,7 @@ save_operate_mode       var byte    ; a place to save the current operate_mode, 
 ;=============================================================================
 
 MAX_DAC_VALUE   con 31
+MIN_DAC_VALUE   con 2
 RampDownCounts  var word[MAX_DAC_VALUE]
 
 TT_ZERO_OFFSET_HI  con $0
@@ -98,7 +99,7 @@ turntable_goto_position:
     gosub StartHalfSecondTimer
 
     ; start the turntable at slowest speed
-    TURNTABLE_DAC = 1
+    TURNTABLE_DAC = MIN_DAC_VALUE
 
     if (CounterStop[1] != 0) || (CounterStop[0] > RampDownCounts[0] + RampDownCounts[1]) then 
         ; number of counts to move (CounterStop) is big enough that we will use the half second
@@ -124,7 +125,7 @@ wait_until_done:
 ; turntable_stop: stop the turntable, this can happen under two circumstances
 ;   1.  After "wait_until_done" has see the turntable counter reach the desired position at the slowest speed.
 ;   2.  When positioning the turntable in program mode with the clockwise/counter clockwise keys.
-;       When the key is released, turntable_stop is called.  The turntable my be moving at any speed.
+;       When the key is released, turntable_stop is called.  The turntable may be moving at any speed.
 ;
 turntable_stop:
     gosub StopHalfSecondTimer 
@@ -201,14 +202,14 @@ HalfSecondTimerExpired:
         ; less than the number of counts required to slow down from the turntable speed
         do
             TURNTABLE_DAC = TURNTABLE_DAC - 1
-        loop until (TURNTABLE_DAC = 1) or ((long_minuend[1] = 0) and (long_minuend[0] > RampDownCounts[TURNTABLE_DAC-1]))
+        loop until (TURNTABLE_DAC = MIN_DAC_VALUE) or ((long_minuend[1] = 0) and (long_minuend[0] > RampDownCounts[TURNTABLE_DAC-1]))
     else
         ; it's OK to speed up the turntable (or keep moving at the max speed)
         if (TURNTABLE_DAC < MAX_DAC_VALUE) then
             TURNTABLE_DAC = TURNTABLE_DAC + 1
         endif
     endif
-    if TURNTABLE_DAC = 1 then
+    if TURNTABLE_DAC = MIN_DAC_VALUE then
         ; once we've ramped down to the slowest speed, just wait until we get to the desired position
         gosub wait_until_done
     endif
