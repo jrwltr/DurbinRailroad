@@ -1,11 +1,20 @@
 ;=============================================================================
 current_tt_loc      var word[2] ; the current turntable position
+tt_180              var word[2] ; number of counts in 180 degrees
 tt_stop             var word    ; the ordinal value of a preprogrammed turntable position
 
 tt_ee_switch        var word    ; the Loconet switch read from EEPROM
 tt_ee_position      var word[2] ; the turntable postion read from EEPROM
 
 MAX_TT_STOPS        con 40
+
+;=============================================================================
+TT_ZERO_OFFSET_HI  con $0
+TT_ZERO_OFFSET_LO  con $800
+    ; TT_ZERO_OFFSET_HI:TT_ZERO_OFFSET_LO is a 32 bit value which is added to
+    ; every turntable position.  When you go to position 0, you're really going
+    ; to this offset.  This allows the use of -1 ($ffffffff) as a marker for
+    ; for an undefined position
 
 ;=============================================================================
 CURRENT_LOCATION_EEPROM_ADDRESS con 0
@@ -15,6 +24,7 @@ TRANSLATE_TABLE_EEPROM_ADDRESS  con 4
     ; each translate table entry is 6 bytes
     ;    the first two bytes contain the Loconet switch number
     ;    the next four bytes contain the turntable position
+_180_LOCATION_EEPROM_ADDRESS    con 6004
 
 ;=============================================================================
 ; turntable_ee_save_current_location: save the current turntable position to eeprom
@@ -38,6 +48,33 @@ turntable_ee_read_current_location:
     current_tt_loc[1] = ee_long[1]
     return
 
+;=============================================================================
+; turntable_ee_save_180: save the number of counts in 180 degrees to eeprom
+;   input: tt_180
+;
+turntable_ee_save_180:
+    ee_long[0] = tt_180[0]
+    ee_long[1] = tt_180[1]
+    ee_address = _180_LOCATION_EEPROM_ADDRESS
+    goto eeprom_write_long
+
+;=============================================================================
+; turntable_ee_read_180: read the number of counts in 180 degrees from eeprom,
+;   output: tt_180
+;
+turntable_ee_read_180:
+    ee_address = _180_LOCATION_EEPROM_ADDRESS
+    gosub eeprom_read_long
+    if (ee_long[0] = $ffff) and (ee_long[1] = $ffff) then
+        tt_180[0] = 0
+        tt_180[1] = 0
+    else
+        tt_180[0] = ee_long[0]
+        tt_180[1] = ee_long[1]
+    endif
+    return
+
+    
 ;=============================================================================
 ; turntable_ee_read_stop: read a preprogrammed stop from EEPROM
 ;   input:  tt_stop

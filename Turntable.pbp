@@ -11,24 +11,13 @@ last_switch_request     var word    ; the last switch request received on the Lo
 save_operate_mode       var byte    ; a place to save the current operate_mode, while
                                     ; the turntable is moving
 
+tt_max_loc              var word[2] ; upper limit of turntable movement
+
 ;=============================================================================
 
 MAX_DAC_VALUE   con 31
 MIN_DAC_VALUE   con 2
 RampDownCounts  var word[MAX_DAC_VALUE]
-
-TT_ZERO_OFFSET_HI  con $0
-TT_ZERO_OFFSET_LO  con $800
-    ; TT_ZERO_OFFSET_HI:TT_ZERO_OFFSET_LO is a 32 bit value which is added to
-    ; every turntable position.  When you go to position 0, you're really going
-    ; to this offset.  This allows the use of -1 ($ffffffff) as a marker for
-    ; for an undefined position
-
-TT_MAX_POSITION_LO  con $86A0
-TT_MAX_POSITION_HI  con $1
-    ; TT_MAX_POSITION_HI:TT_MAX_POSITION_LO is a 32 bit value representing
-    ; the maximum turntable position.  It is shortly beyond a 360 degree
-    ; movement from the zero position.
 
 ;=============================================================================
 ; turntable_set_zero: mark the current location of the turntable as position 0
@@ -37,6 +26,39 @@ turntable_set_zero:
     current_tt_loc[0] = TT_ZERO_OFFSET_LO
     current_tt_loc[1] = TT_ZERO_OFFSET_HI
     goto turntable_ee_save_current_location
+
+;=============================================================================
+; turntable_set_180: mark the current location of the turntable as 180 degrees from 0
+;
+turntable_set_180:
+    long_minuend[0] = current_tt_loc[0]
+    long_minuend[1] = current_tt_loc[1]
+    long_subtrahend[0] = TT_ZERO_OFFSET_LO
+    long_subtrahend[1] = TT_ZERO_OFFSET_HI
+    gosub long_subtract
+    tt_180[0] = long_result[0]
+    tt_180[1] = long_result[1]
+    gosub turntable_ee_save_180
+turntable_compute_max_loc:
+    if (tt_180[0] = 0) and (tt_180[1] = 0) then
+        ; $186A0 is maximum value is default value for a little more than 360 degrees
+        long_addend1[0] = $86A0
+        long_addend1[1] = $1
+    else
+        long_addend1[0] = tt_180[0]
+        long_addend1[1] = tt_180[1]
+        long_addend2[0] = tt_180[0]
+        long_addend2[1] = tt_180[1]
+        gosub long_add
+        long_addend1[0] = long_result[0]
+        long_addend1[1] = long_result[1]
+    endif
+    long_addend2[0] = TT_ZERO_OFFSET_LO
+    long_addend2[1] = TT_ZERO_OFFSET_HI
+    gosub long_add
+    tt_max_loc[0] = long_result[0]
+    tt_max_loc[1] = long_result[1]
+    return
 
 ;=============================================================================
 ;turntable_goto_position: move the turntable to the requested position
@@ -227,13 +249,8 @@ turntable_counterclockwise:
 turntable_clockwise:
     ; in program mode, the clockwise key was pressed, goto the maximum position
     ; or until the key is released
-    long_addend1[0] = TT_ZERO_OFFSET_LO
-    long_addend1[1] = TT_ZERO_OFFSET_HI
-    long_addend2[0] = TT_MAX_POSITION_LO
-    long_addend2[1] = TT_MAX_POSITION_HI
-    gosub long_add
-    position_to_goto[0] = long_result[0]
-    position_to_goto[1] = long_result[1]
+    position_to_goto[0] = tt_max_loc[0]
+    position_to_goto[1] = tt_max_loc[1]
     goto turntable_goto_position
 
 ;=============================================================================
@@ -373,6 +390,8 @@ turntable_initialize:
     desired_tt_position[1] = $ffff
 
     gosub turntable_ee_read_current_location
+    gosub turntable_ee_read_180
+    gosub turntable_compute_max_loc
 
     ; try to find the current location in the translation table
     for tt_stop = 0 to MAX_TT_STOPS - 1

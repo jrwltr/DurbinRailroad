@@ -27,6 +27,10 @@ loconet_switch      var word
 
 display_update_needed   var bit
 
+CalibrateState  var bit[1]
+    CAL_SET_ZERO    con 0
+    CAL_SET_180     con 1
+
 ;=============================================================================
 
 INCLUDE "LCD4X20.pbp"
@@ -90,8 +94,12 @@ update_display:
     gosub display_set_cursor
     if operate_mode = MODE_OPERATE then
         ARRAYWRITE DisplayString, ["UP  DWN  GO", 0]
+        if (tt_180[0] != 0) or (tt_180[1] != 0) then
+            gosub display_write_string
+            ARRAYWRITE DisplayString, ["  180", 0]
+        endif
     elseif operate_mode = MODE_PROGRAM then
-        ARRAYWRITE DisplayString, ["CW CCW SET ZERO", 0]
+        ARRAYWRITE DisplayString, ["CW CCW SET CAL", 0]
     elseif operate_mode = MODE_MOVING then
         ARRAYWRITE DisplayString, ["Moving", 0]
     endif
@@ -146,13 +154,30 @@ button_3_pressed:
 
 button_4_pressed:
     if operate_mode = MODE_OPERATE then
-        ; nop
-        return
+        if (tt_180[0] != 0) or (tt_180[1] != 0) then
+            long_minuend[0] = current_tt_loc[0]
+            long_minuend[1] = current_tt_loc[1]
+            long_subtrahend[0] = tt_180[0]
+            long_subtrahend[1] = tt_180[1]
+            gosub long_subtract
+            position_to_goto[0] = long_result[0]
+            position_to_goto[1] = long_result[1]
+            if (long_result[1] & $8000) then
+                ; current_tt_loc is less than 180 degrees, move clockwise
+                long_addend1[0] = current_tt_loc[0]
+                long_addend1[1] = current_tt_loc[1]
+                long_addend2[0] = tt_180[0]
+                long_addend2[1] = tt_180[1]
+                gosub long_add
+                position_to_goto[0] = long_result[0]
+                position_to_goto[1] = long_result[1]
+            endif
+            goto turntable_goto_position
+        endif
     elseif operate_mode = MODE_PROGRAM then
-        goto turntable_set_zero
-    else
-        return
+        CalibrateState = CAL_SET_ZERO
     endif
+    return
 
 ;=============================================================================
 button_1_repeat:
@@ -168,7 +193,12 @@ button_2_repeat:
     goto button_cancel_repeat
 
 button_3_repeat:
+    goto button_cancel_repeat
+
 button_4_repeat:
+    if operate_mode = MODE_PROGRAM then
+        CalibrateState = CAL_SET_180
+    endif
     goto button_cancel_repeat
 
 ;=============================================================================
@@ -178,7 +208,15 @@ button_2_released:
         goto turntable_stop
     endif
 button_3_released:
+    return
 button_4_released:
+    if operate_mode = MODE_PROGRAM then
+        if (CalibrateState = CAL_SET_ZERO) then
+            gosub turntable_set_zero
+        elseif (CalibrateState = CAL_SET_180) then
+            gosub turntable_set_180
+        endif
+    endif
     return
 
 ;=============================================================================
