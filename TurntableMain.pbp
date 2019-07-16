@@ -27,9 +27,13 @@ loconet_switch      var word
 
 display_update_needed   var bit
 
-CalibrateState  var bit[1]
-    CAL_SET_ZERO    con 0
-    CAL_SET_180     con 1
+button3_state       var byte
+    BUTTON3_SET_SWITCH      con 0
+    BUTTON3_SET_0           con 1
+    BUTTON3_CAL_180         con 2
+    BUTTON3_SET_180_SWITCH  con 3
+
+turntable_reset_180 var bit[0]
 
 ;=============================================================================
 
@@ -70,9 +74,14 @@ update_display:
     endif
     gosub display_write_string
 
-    long_minuend[0] = desired_tt_position[0]
-    long_minuend[1] = desired_tt_position[1]
-    gosub display_long
+    if (loconet_switch != $ffff) and (loconet_switch = tt_180_switch) then
+        ARRAYWRITE DisplayString, [">180 ", 0]
+        gosub display_write_string
+    else
+        long_minuend[0] = desired_tt_position[0]
+        long_minuend[1] = desired_tt_position[1]
+        gosub display_long
+    endif
 
     long_minuend[0] = current_tt_loc[0]
     long_minuend[1] = current_tt_loc[1]
@@ -94,12 +103,24 @@ update_display:
     gosub display_set_cursor
     if operate_mode = MODE_OPERATE then
         ARRAYWRITE DisplayString, ["UP  DWN  GO", 0]
-        if (tt_180[0] != 0) or (tt_180[1] != 0) then
+        if (tt_180[0] != $ffff) or (tt_180[1] != $ffff) then
             gosub display_write_string
             ARRAYWRITE DisplayString, ["  180", 0]
         endif
     elseif operate_mode = MODE_PROGRAM then
-        ARRAYWRITE DisplayString, ["CW CCW SET CAL", 0]
+        ARRAYWRITE DisplayString, ["CW CCW ", 0]
+        gosub display_write_string
+        if (button3_state = BUTTON3_SET_SWITCH) then
+            ARRAYWRITE DisplayString, [" SET  ", 0]
+        elseif (button3_state = BUTTON3_SET_0) then
+            ARRAYWRITE DisplayString, [" ZERO ", 0]
+        elseif (button3_state = BUTTON3_CAL_180) then
+            ARRAYWRITE DisplayString, [" C180 ", 0]
+        elseif (button3_state = BUTTON3_SET_180_SWITCH) then
+            ARRAYWRITE DisplayString, ["180SW ", 0]
+        endif
+        gosub display_write_string
+        ARRAYWRITE DisplayString, ["FNC", 0]
     elseif operate_mode = MODE_MOVING then
         ARRAYWRITE DisplayString, ["Moving", 0]
     endif
@@ -146,36 +167,18 @@ button_3_pressed:
         position_to_goto[0] = desired_tt_position[0]
         position_to_goto[1] = desired_tt_position[1]
         goto turntable_goto_position
-    elseif operate_mode = MODE_PROGRAM then
-        goto turntable_set_translation
     else
         return
     endif
 
 button_4_pressed:
     if operate_mode = MODE_OPERATE then
-        if (tt_180[0] != 0) or (tt_180[1] != 0) then
-            long_minuend[0] = current_tt_loc[0]
-            long_minuend[1] = current_tt_loc[1]
-            long_subtrahend[0] = tt_180[0]
-            long_subtrahend[1] = tt_180[1]
-            gosub long_subtract
-            position_to_goto[0] = long_result[0]
-            position_to_goto[1] = long_result[1]
-            if (long_result[1] & $8000) then
-                ; current_tt_loc is less than 180 degrees, move clockwise
-                long_addend1[0] = current_tt_loc[0]
-                long_addend1[1] = current_tt_loc[1]
-                long_addend2[0] = tt_180[0]
-                long_addend2[1] = tt_180[1]
-                gosub long_add
-                position_to_goto[0] = long_result[0]
-                position_to_goto[1] = long_result[1]
-            endif
-            goto turntable_goto_position
-        endif
+        goto turntable_move_180_degrees
     elseif operate_mode = MODE_PROGRAM then
-        CalibrateState = CAL_SET_ZERO
+        button3_state = button3_state + 1
+        if (button3_state > BUTTON3_SET_180_SWITCH) then
+            button3_state = BUTTON3_SET_SWITCH
+        endif
     endif
     return
 
@@ -193,12 +196,8 @@ button_2_repeat:
     goto button_cancel_repeat
 
 button_3_repeat:
-    goto button_cancel_repeat
-
+    turntable_reset_180 = 1
 button_4_repeat:
-    if operate_mode = MODE_PROGRAM then
-        CalibrateState = CAL_SET_180
-    endif
     goto button_cancel_repeat
 
 ;=============================================================================
@@ -207,14 +206,27 @@ button_2_released:
     if operate_mode = MODE_MOVING then
         goto turntable_stop
     endif
-button_3_released:
-    return
 button_4_released:
+    return
+
+button_3_released:
     if operate_mode = MODE_PROGRAM then
-        if (CalibrateState = CAL_SET_ZERO) then
-            gosub turntable_set_zero
-        elseif (CalibrateState = CAL_SET_180) then
-            gosub turntable_set_180
+        if (button3_state = BUTTON3_SET_SWITCH) then
+            goto turntable_set_translation
+        elseif (button3_state = BUTTON3_SET_0) then
+            goto turntable_set_zero
+        elseif (button3_state = BUTTON3_CAL_180) then
+            if turntable_reset_180 then
+                tt_180[0] = $ffff
+                tt_180[1] = $ffff
+                gosub turntable_ee_save_180
+                gosub turntable_compute_max_loc
+                turntable_reset_180 = 0
+            else
+                goto turntable_set_180
+            endif
+        elseif (button3_state = BUTTON3_SET_180_SWITCH) then
+            goto turntable_set_switch_180
         endif
     endif
     return

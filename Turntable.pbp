@@ -40,7 +40,7 @@ turntable_set_180:
     tt_180[1] = long_result[1]
     gosub turntable_ee_save_180
 turntable_compute_max_loc:
-    if (tt_180[0] = 0) and (tt_180[1] = 0) then
+    if (tt_180[0] = $ffff) and (tt_180[1] = $ffff) then
         ; $186A0 is maximum value is default value for a little more than 360 degrees
         long_addend1[0] = $86A0
         long_addend1[1] = $1
@@ -59,6 +59,34 @@ turntable_compute_max_loc:
     tt_max_loc[0] = long_result[0]
     tt_max_loc[1] = long_result[1]
     return
+
+;=============================================================================
+turntable_set_switch_180:
+    if (loconet_switch = $ffff) then return
+    tt_180_switch = loconet_switch
+    goto turntable_ee_save_switch_180
+
+;=============================================================================
+turntable_move_180_degrees:
+    if (tt_180[0] = $ffff) and (tt_180[1] = $ffff) then return
+    long_minuend[0] = current_tt_loc[0]
+    long_minuend[1] = current_tt_loc[1]
+    long_subtrahend[0] = tt_180[0]
+    long_subtrahend[1] = tt_180[1]
+    gosub long_subtract
+    position_to_goto[0] = long_result[0]
+    position_to_goto[1] = long_result[1]
+    if (long_result[1] & $8000) then
+        ; current_tt_loc is less than 180 degrees, move clockwise
+        long_addend1[0] = current_tt_loc[0]
+        long_addend1[1] = current_tt_loc[1]
+        long_addend2[0] = tt_180[0]
+        long_addend2[1] = tt_180[1]
+        gosub long_add
+        position_to_goto[0] = long_result[0]
+        position_to_goto[1] = long_result[1]
+    endif
+    goto turntable_goto_position
 
 ;=============================================================================
 ;turntable_goto_position: move the turntable to the requested position
@@ -296,26 +324,32 @@ turntable_previous_location:
 ;   input: loconet_switch
 ;
 handle_switch_request:
-    ; see if this switch is stored a a preprogrammed stop in EEPROM
-    gosub turntable_ee_look_up_loconet_switch
-    if (tt_ee_switch = loconet_switch) then
-        ; loconet_switch found in translate table
-        desired_tt_position[0] = tt_ee_position[0]
-        desired_tt_position[1] = tt_ee_position[1]
-        last_switch_request = loconet_switch
+    if (tt_180_switch = loconet_switch) then
         if operate_mode = MODE_OPERATE then
-            position_to_goto[0] = desired_tt_position[0]
-            position_to_goto[1] = desired_tt_position[1]
-            goto turntable_goto_position
+            goto turntable_move_180_degrees:
         endif
     else
-        ; loconet_switch not found in translate table
-        if operate_mode = MODE_OPERATE then 
-            ; ignore the switch request
-            loconet_switch = last_switch_request
+        ; see if this switch is stored a a preprogrammed stop in EEPROM
+        gosub turntable_ee_look_up_loconet_switch
+        if (tt_ee_switch = loconet_switch) then
+            ; loconet_switch found in translate table
+            desired_tt_position[0] = tt_ee_position[0]
+            desired_tt_position[1] = tt_ee_position[1]
+            last_switch_request = loconet_switch
+            if operate_mode = MODE_OPERATE then
+                position_to_goto[0] = desired_tt_position[0]
+                position_to_goto[1] = desired_tt_position[1]
+                goto turntable_goto_position
+            endif
         else
-            desired_tt_position[0] = $ffff
-            desired_tt_position[1] = $ffff
+            ; loconet_switch not found in translate table
+            if operate_mode = MODE_OPERATE then 
+                ; ignore the switch request
+                loconet_switch = last_switch_request
+            else
+                desired_tt_position[0] = $ffff
+                desired_tt_position[1] = $ffff
+            endif
         endif
     endif
     return
@@ -389,6 +423,7 @@ turntable_initialize:
     desired_tt_position[0] = $ffff
     desired_tt_position[1] = $ffff
 
+    gosub turntable_ee_read_switch_180
     gosub turntable_ee_read_current_location
     gosub turntable_ee_read_180
     gosub turntable_compute_max_loc
