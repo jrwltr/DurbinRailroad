@@ -7,6 +7,8 @@
 #define DO_EEPROM
 #define DO_LONG_EEPROM_FUNCTIONS
 
+;#define ERASE_EEPROM
+
 ;=============================================================================
 
 CLEAR       ; zero all variables
@@ -74,14 +76,9 @@ update_display:
     endif
     gosub display_write_string
 
-    if (loconet_switch != $ffff) and (loconet_switch = tt_180_switch) then
-        ARRAYWRITE DisplayString, [">180 ", 0]
-        gosub display_write_string
-    else
-        long_minuend[0] = desired_tt_position[0]
-        long_minuend[1] = desired_tt_position[1]
-        gosub display_long
-    endif
+    long_minuend[0] = desired_tt_loc[0]
+    long_minuend[1] = desired_tt_loc[1]
+    gosub display_long
 
     long_minuend[0] = current_tt_loc[0]
     long_minuend[1] = current_tt_loc[1]
@@ -164,8 +161,8 @@ operate_down_key:
 button_3_pressed:
     ; enter key
     if operate_mode = MODE_OPERATE then
-        position_to_goto[0] = desired_tt_position[0]
-        position_to_goto[1] = desired_tt_position[1]
+        position_to_goto[0] = desired_tt_loc[0]
+        position_to_goto[1] = desired_tt_loc[1]
         goto turntable_goto_position
     else
         return
@@ -173,7 +170,9 @@ button_3_pressed:
 
 button_4_pressed:
     if operate_mode = MODE_OPERATE then
-        goto turntable_move_180_degrees
+        position_to_goto[0] = TT_180_SW_MARKER_LO
+        position_to_goto[1] = TT_180_SW_MARKER_HI
+        gosub turntable_goto_position
     elseif operate_mode = MODE_PROGRAM then
         button3_state = button3_state + 1
         if (button3_state > BUTTON3_SET_180_SWITCH) then
