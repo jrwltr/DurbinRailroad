@@ -86,14 +86,7 @@ update_display:
 
     gosub display_clear_to_end_of_line
 
-    DisplayCol = DISPLAY_COLUMNS-1
-    gosub display_set_cursor
-    if operate_mode = MODE_OPERATE then
-        ARRAYWRITE DisplayString, ["O", 0]
-    elseif operate_mode = MODE_PROGRAM then
-        ARRAYWRITE DisplayString, ["P", 0]
-    endif
-    gosub display_write_string
+    gosub display_operate_program
 
     DisplayRow = 1
     DisplayCol = 0
@@ -124,6 +117,23 @@ update_display:
     gosub display_write_string
     goto display_clear_to_end_of_line
 
+;=============================================================================
+operate_program_flash:
+    DisplayRow = 0
+    DisplayCol = DISPLAY_COLUMNS-1
+    gosub display_set_cursor
+    ARRAYWRITE DisplayString, [" ", 0]
+    goto display_write_string
+    pause 400
+display_operate_program:
+    DisplayCol = DISPLAY_COLUMNS-1
+    gosub display_set_cursor
+    if operate_mode = MODE_OPERATE then
+        ARRAYWRITE DisplayString, ["O", 0]
+    elseif operate_mode = MODE_PROGRAM then
+        ARRAYWRITE DisplayString, ["P", 0]
+    endif
+    goto display_write_string
 
 ;=============================================================================
 operate_switch_on:

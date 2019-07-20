@@ -121,6 +121,17 @@ update_display:
         gosub display_clear_to_end_of_line
     endif
 
+    goto display_operate_program
+
+;=============================================================================
+operate_program_flash:
+    DisplayCol = 1
+    DisplayCol = DISPLAY_COLUMNS-1
+    gosub display_set_cursor
+    ARRAYWRITE DisplayString, [" ", 0]
+    goto display_write_string
+    pause 400
+display_operate_program:
     DisplayRow = 0
     DisplayCol = DISPLAY_COLUMNS-1
     gosub display_set_cursor

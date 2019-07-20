@@ -86,9 +86,8 @@ onboard_switch_check:
         button_counter = button_counter + 1
         if button_counter = button_end_count then
             display_update_needed = 1
-#ifdef DO_DEVELOPEMENT_BOARD
-            led_to_change = LED_ONBOARD_BUTTON
-            gosub led_flash
+#ifdef DO_OPERATE_PROGRAM
+            gosub operate_program_flash
 #endif
             if button_end_count = BUTTON_FIRST_COUNT then
                 ; first time button press

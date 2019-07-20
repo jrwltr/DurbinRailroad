@@ -5,15 +5,6 @@
 #ifdef DO_SWITCHMOTOR
 LED_SWITCHMOTOR_BUTTON  con 0
 #endif
-#ifdef DO_DEVELOPEMENT_BOARD
-#ifdef DO_ONBOARD_SWITCHES
-LED_ONBOARD_BUTTON      con 1
-#endif
-#ifdef DO_LOCONET
-LED_LOCONET_PKT         con 2
-#endif
-LED_DEBUG               con 3
-#endif
 
 led_to_change var byte
     ; set led_to_change before calling led_on, led_off, led_flash, and led_blink.

@@ -137,10 +137,6 @@ scan_motor_buttons:
 #ifdef DO_DISPLAY
             display_update_needed = 1
 #endif
-#ifdef DO_DEVELOPEMENT_BOARD
-            led_to_change = LED_SWITCHMOTOR_BUTTON
-            gosub led_flash
-#endif
 #ifdef DO_SWITCH_CONTROLLER
             switch_not_defined = 0
 #endif
