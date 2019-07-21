@@ -31,12 +31,12 @@ turntable_set_zero:
 ; turntable_set_180: mark the current location of the turntable as 180 degrees from 0
 ;
 turntable_set_180:
-    if (current_tt_loc[0] = 0) and (current_tt_loc[1] = 0) then return
     long_minuend[0] = current_tt_loc[0]
     long_minuend[1] = current_tt_loc[1]
     long_subtrahend[0] = TT_ZERO_OFFSET_LO
     long_subtrahend[1] = TT_ZERO_OFFSET_HI
     gosub long_subtract
+    if (long_result[0] = 0) and (long_result[1] = 0) then return
     tt_180[0] = long_result[0]
     tt_180[1] = long_result[1]
     gosub turntable_ee_save_180
