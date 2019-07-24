@@ -457,7 +457,9 @@ CLC1SEL1 = $01		; Selects CLCIN1PPS (RC4)
 
 ;Enable chosen inputs to CLC1 
 CLC1GLS0 = $02		; Enables RA3 into the OR-XOR logic from gate 1
+CLC1GLS1 = $02		; Enables RA3 into the OR-XOR logic from gate 2
 CLC1GLS2 = $08		; Enables RC4 into the OR-XOR logic from gate 3
+CLC1GLS3 = $08		; Enables RC4 into the OR-XOR logic from gate 4
 
 ;Setup both input gate and function output polarities:
 CLC1POL = $00		; No polarity inversions
