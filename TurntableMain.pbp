@@ -7,8 +7,6 @@
 #define DO_EEPROM
 #define DO_LONG_EEPROM_FUNCTIONS
 
-;#define ERASE_EEPROM
-
 ;=============================================================================
 
 CLEAR       ; zero all variables
@@ -34,6 +32,7 @@ button3_state       var byte
     BUTTON3_SET_0           con 1
     BUTTON3_CAL_180         con 2
     BUTTON3_SET_180_SWITCH  con 3
+    BUTTON3_ERASE_EEPROM    con 4
 
 turntable_reset_180 var bit[0]
 
@@ -108,7 +107,10 @@ update_display:
             ARRAYWRITE DisplayString, [" C180 ", 0]
         elseif (button3_state = BUTTON3_SET_180_SWITCH) then
             ARRAYWRITE DisplayString, ["180SW ", 0]
+        elseif (button3_state = BUTTON3_ERASE_EEPROM) then
+            ARRAYWRITE DisplayString, ["ERASE ", 0]
         endif
+
         gosub display_write_string
         ARRAYWRITE DisplayString, ["FNC", 0]
     elseif operate_mode = MODE_MOVING then
@@ -156,6 +158,8 @@ operate_up_key:
         gosub turntable_previous_location
     elseif operate_mode = MODE_PROGRAM then
         gosub turntable_clockwise
+    elseif operate_mode = MODE_MOVING then
+        goto turntable_stop
     endif
     return
 
@@ -165,6 +169,8 @@ operate_down_key:
         gosub turntable_next_location
     elseif operate_mode = MODE_PROGRAM then
         gosub turntable_counterclockwise
+    elseif operate_mode = MODE_MOVING then
+        goto turntable_stop
     endif
     return
 
@@ -174,6 +180,8 @@ button_3_pressed:
         position_to_goto[0] = desired_tt_loc[0]
         position_to_goto[1] = desired_tt_loc[1]
         goto turntable_goto_position
+    elseif operate_mode = MODE_MOVING then
+        goto turntable_stop
     else
         return
     endif
@@ -185,9 +193,11 @@ button_4_pressed:
         gosub turntable_goto_position
     elseif operate_mode = MODE_PROGRAM then
         button3_state = button3_state + 1
-        if (button3_state > BUTTON3_SET_180_SWITCH) then
+        if (button3_state > BUTTON3_ERASE_EEPROM) then
             button3_state = BUTTON3_SET_SWITCH
         endif
+    elseif operate_mode = MODE_MOVING then
+        goto turntable_stop
     endif
     return
 
@@ -205,7 +215,14 @@ button_2_repeat:
     goto button_cancel_repeat
 
 button_3_repeat:
-    turntable_reset_180 = 1
+    if operate_mode = MODE_PROGRAM then
+        if (button3_state = BUTTON3_CAL_180) then
+            turntable_reset_180 = 1
+        elseif (button3_state = BUTTON3_ERASE_EEPROM) then
+            gosub turntable_erase_eeprom
+            gosub turntable_initialize
+        endif
+    endif
 button_4_repeat:
     goto button_cancel_repeat
 

@@ -36,7 +36,10 @@ turntable_set_180:
     long_subtrahend[0] = TT_ZERO_OFFSET_LO
     long_subtrahend[1] = TT_ZERO_OFFSET_HI
     gosub long_subtract
-    if (long_result[0] = 0) and (long_result[1] = 0) then return
+    if (long_result[0] = 0) and (long_result[1] = 0) then 
+        ; don't allow setting tt_180 to zero
+        return
+    endif
     tt_180[0] = long_result[0]
     tt_180[1] = long_result[1]
     gosub turntable_ee_save_180
@@ -423,10 +426,6 @@ turntable_initialize:
     last_switch_request = $ffff
     desired_tt_loc[0] = $ffff
     desired_tt_loc[1] = $ffff
-
-#ifdef ERASE_EEPROM
-    gosub turntable_erase_eeprom
-#endif
 
     gosub turntable_ee_read_current_location
     gosub turntable_ee_read_180
