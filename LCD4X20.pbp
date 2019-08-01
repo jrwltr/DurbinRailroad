@@ -72,7 +72,7 @@ display_write_command8:
     dspstr[1] = DisplayData | DISPLAY_BKLT | DISPLAY_E
     dspstr[3] = DisplayData | DISPLAY_BKLT
     I2CWRITE DISPLAY_I2C_DATA,DISPLAY_I2C_CLK,DISPLAY_I2C_ADDRESS,[STR dspstr \3]
-    PAUSEUS 500
+    PAUSE 10
     RETURN
 
 ;=============================================================================
@@ -87,7 +87,7 @@ display_write_command4:
     dspstr[4]= ((DisplayData & $0f)<<4) | DISPLAY_BKLT | DISPLAY_E
     dspstr[5]= ((DisplayData & $0f)<<4) | DISPLAY_BKLT
     I2CWRITE DISPLAY_I2C_DATA,DISPLAY_I2C_CLK,DISPLAY_I2C_ADDRESS,[STR dspstr \6]
-    PAUSEUS 1000
+    PAUSE 10
     RETURN
 
 ;=============================================================================
@@ -145,9 +145,10 @@ display_initialize:
 
     ; Set I2C Display Port outputs to zero
     I2CWRITE DISPLAY_I2C_DATA,DISPLAY_I2C_CLK,DISPLAY_I2C_ADDRESS,[$00]
+    PAUSE 100 ' Wait for LCD to start up
 
     ; Send commands to initialize display to 4-bit access
-    Pause 100 ' Wait for LCD to start up
+
     ; Function Set for 8-bit
     DisplayData = DSP_FUNCTION_SET|DSP_FS_DL8
     gosub display_write_command8
