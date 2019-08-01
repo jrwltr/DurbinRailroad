@@ -141,6 +141,14 @@ display_operate_program:
 operate_switch_on:
     if operate_mode != MODE_OPERATE then 
         operate_mode = MODE_OPERATE
+        if (desired_tt_loc[0] = $ffff) and (desired_tt_loc[1] = $ffff) then
+            tt_stop = 0
+            gosub turntable_ee_read_stop
+            loconet_switch = tt_ee_switch
+            last_switch_request = tt_ee_switch
+            desired_tt_loc[0] = tt_ee_position[0]
+            desired_tt_loc[1] = tt_ee_position[1]
+        endif
     endif
     return
 

@@ -4,6 +4,7 @@ desired_tt_loc      var word[2] ; the turntable position corresponding
                                 ; to a preprogrammed turntable stop
 tt_180              var word[2] ; number of counts in 180 degrees
 tt_stop             var word    ; the ordinal value of a preprogrammed turntable position
+tt_temp_stop        var word    ; temporary storage for tt_stop
 
 tt_ee_switch        var word    ; the Loconet switch read from EEPROM
 tt_ee_position      var word[2] ; the turntable postion read from EEPROM
@@ -112,7 +113,6 @@ turntable_ee_write_stop:
 ;   input:  currrent_tt_loc is the current turntable position
 ;           loconet_switch the loconet switch number that identifies the stop
 ;
-tt_insert   var byte
 turntable_ee_set_translation:
     if (loconet_switch = $ffff) or ((current_tt_loc[0] = $ffff) and (current_tt_loc[1] = $ffff)) then return
     ; see if an existing preprogrammed stop exists corresponding to loconet_switch
@@ -130,7 +130,7 @@ turntable_ee_set_translation:
         ; adding to end of the list or updating an existing entry
     else
         ; adding a new entry in the middle of the list
-        tt_insert = tt_stop
+        tt_temp_stop = tt_stop
         ; find the end of the list
         for tt_stop = tt_stop + 1 to MAX_TT_STOPS-1
             gosub turntable_ee_read_stop
@@ -141,7 +141,7 @@ turntable_ee_set_translation:
             return
         endif
         ; shift the list entries up to make room for the new one
-        for tt_stop = tt_stop to tt_insert + 1 step -1
+        for tt_stop = tt_stop to tt_temp_stop + 1 step -1
             tt_stop = tt_stop - 1
             gosub turntable_ee_read_stop
             tt_stop = tt_stop + 1
@@ -182,6 +182,8 @@ turntable_ee_delete_stop:
         next tt_stop
         tt_stop = tt_stop - 1
     endif
+    desired_tt_loc[0] = $ffff
+    desired_tt_loc[1] = $ffff
     tt_ee_switch = $ffff
     tt_ee_position[0] = $ffff
     tt_ee_position[1] = $ffff
