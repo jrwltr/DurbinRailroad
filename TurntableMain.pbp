@@ -34,7 +34,7 @@ button3_state       var byte
     BUTTON3_SET_180_SWITCH  con 3
     BUTTON3_ERASE_EEPROM    con 4
 
-turntable_reset_180 var bit[0]
+button3_repeated   var bit[0]
 
 ;=============================================================================
 
@@ -175,7 +175,7 @@ operate_down_key:
     return
 
 button_3_pressed:
-    ; enter key
+    button3_repeated = 0
     if operate_mode = MODE_OPERATE then
         position_to_goto[0] = desired_tt_loc[0]
         position_to_goto[1] = desired_tt_loc[1]
@@ -216,12 +216,7 @@ button_2_repeat:
 
 button_3_repeat:
     if operate_mode = MODE_PROGRAM then
-        if (button3_state = BUTTON3_CAL_180) then
-            turntable_reset_180 = 1
-        elseif (button3_state = BUTTON3_ERASE_EEPROM) then
-            gosub turntable_erase_eeprom
-            gosub turntable_initialize
-        endif
+        button3_repeated = 1
     endif
 button_4_repeat:
     goto button_cancel_repeat
@@ -238,21 +233,30 @@ button_4_released:
 button_3_released:
     if operate_mode = MODE_PROGRAM then
         if (button3_state = BUTTON3_SET_SWITCH) then
-            goto turntable_set_translation
+            if button3_repeated then
+                goto turntable_ee_delete_stop
+            else
+                goto turntable_ee_set_translation
+            endif
         elseif (button3_state = BUTTON3_SET_0) then
             goto turntable_set_zero
         elseif (button3_state = BUTTON3_CAL_180) then
-            if turntable_reset_180 then
+            if button3_repeated then
                 tt_180[0] = $ffff
                 tt_180[1] = $ffff
                 gosub turntable_ee_save_180
                 gosub turntable_compute_max_loc
-                turntable_reset_180 = 0
+                button3_repeated = 0
             else
                 goto turntable_set_180
             endif
         elseif (button3_state = BUTTON3_SET_180_SWITCH) then
             goto turntable_set_switch_180
+        elseif (button3_state = BUTTON3_ERASE_EEPROM) then
+            if button3_repeated then
+                gosub turntable_erase_eeprom
+                gosub turntable_initialize
+            endif
         endif
     endif
     return

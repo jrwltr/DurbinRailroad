@@ -1,5 +1,7 @@
 ;=============================================================================
 current_tt_loc      var word[2] ; the current turntable position
+desired_tt_loc      var word[2] ; the turntable position corresponding 
+                                ; to a preprogrammed turntable stop
 tt_180              var word[2] ; number of counts in 180 degrees
 tt_stop             var word    ; the ordinal value of a preprogrammed turntable position
 
@@ -17,7 +19,7 @@ TT_ZERO_OFFSET_LO  con $800
     ; for an undefined position
 
 TT_180_SW_MARKER_HI con $0
-TT_180_SW_MARKER_LO con $980
+TT_180_SW_MARKER_LO con $980    ; 180 + TT_ZERO_OFFSET_LO
     ; TT_180_SW_MARKER_HI:TT_180_SW_MARKER_LO is a 32 bit value used to mark
     ; the Loconet 180 switch
 
@@ -104,6 +106,86 @@ turntable_ee_write_stop:
     ee_long[1] = tt_ee_position[1]
     ee_address = ee_address + 2
     goto eeprom_write_long
+
+;=============================================================================
+; turntable_ee_set_translation: save a preprogrammed stop in EEPROM
+;   input:  currrent_tt_loc is the current turntable position
+;           loconet_switch the loconet switch number that identifies the stop
+;
+tt_insert   var byte
+turntable_ee_set_translation:
+    if (loconet_switch = $ffff) or ((current_tt_loc[0] = $ffff) and (current_tt_loc[1] = $ffff)) then return
+    ; see if an existing preprogrammed stop exists corresponding to loconet_switch
+    for tt_stop = 0 to MAX_TT_STOPS - 1
+        gosub turntable_ee_read_stop
+        if (tt_ee_switch >= loconet_switch) then exit
+    next tt_stop
+    if (tt_stop = MAX_TT_STOPS) then
+        ; EEPROM is full
+        return
+    endif
+    desired_tt_loc[0] = current_tt_loc[0]
+    desired_tt_loc[1] = current_tt_loc[1]
+    if (tt_ee_switch = $ffff) or (tt_ee_switch = loconet_switch) then
+        ; adding to end of the list or updating an existing entry
+    else
+        ; adding a new entry in the middle of the list
+        tt_insert = tt_stop
+        ; find the end of the list
+        for tt_stop = tt_stop + 1 to MAX_TT_STOPS-1
+            gosub turntable_ee_read_stop
+            if (tt_ee_switch = $ffff) then exit
+        next tt_stop
+        if tt_stop = MAX_TT_STOPS then
+            ; EEPROM is full
+            return
+        endif
+        ; shift the list entries up to make room for the new one
+        for tt_stop = tt_stop to tt_insert + 1 step -1
+            tt_stop = tt_stop - 1
+            gosub turntable_ee_read_stop
+            tt_stop = tt_stop + 1
+            gosub turntable_ee_write_stop
+        next tt_stop
+    endif
+    tt_ee_switch = loconet_switch
+    tt_ee_position[0] = current_tt_loc[0]
+    tt_ee_position[1] = current_tt_loc[1]
+    goto turntable_ee_write_stop
+
+;=============================================================================
+; turntable_ee_delete_stop: delete a preprogrammed stop from EEPROM
+;   input:  loconet_switch
+turntable_ee_delete_stop:
+    for tt_stop = 0 to MAX_TT_STOPS - 1
+        gosub turntable_ee_read_stop
+        if (tt_ee_switch = loconet_switch) then 
+            ; switch found
+            exit
+        endif
+        if (tt_ee_switch = $ffff) then
+            ; switch not found, nothing to do
+            return
+        endif
+    next tt_stop
+    if (tt_stop = MAX_TT_STOPS) then
+        ; switch not found, nothing to do
+        return
+    endif
+    if (tt_stop < MAX_TT_STOPS - 1) then
+        for tt_stop = (tt_stop + 1) to (MAX_TT_STOPS - 1)
+            gosub turntable_ee_read_stop
+            if (tt_ee_switch = $ffff) then exit
+            tt_stop = tt_stop - 1
+            gosub turntable_ee_write_stop
+            tt_stop = tt_stop + 1
+        next tt_stop
+        tt_stop = tt_stop - 1
+    endif
+    tt_ee_switch = $ffff
+    tt_ee_position[0] = $ffff
+    tt_ee_position[1] = $ffff
+    goto turntable_ee_write_stop
 
 ;=============================================================================
 ; turntable_ee_look_up_loconet_switch: find a preprogrammed stop in EEPROM

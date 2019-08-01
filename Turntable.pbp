@@ -1,7 +1,4 @@
 ;=============================================================================
-desired_tt_loc          var word[2] ; the turntable position corresponding 
-                                    ; to a preprogrammed turntable stop
-
 position_to_goto        var word[2] ; set before calling turntable_goto_position
 
 last_switch_request     var word    ; the last switch request received on the Loconet,
@@ -72,9 +69,40 @@ turntable_set_switch_180:
     save_cur_loc[1] = current_tt_loc[1]
     current_tt_loc[0] = TT_180_SW_MARKER_LO
     current_tt_loc[1] = TT_180_SW_MARKER_HI
-    gosub turntable_set_translation
+    gosub turntable_ee_set_translation
     current_tt_loc[0] = save_cur_loc[0]
     current_tt_loc[1] = save_cur_loc[1]
+    return
+
+;=============================================================================
+turntable_compute_180:
+    long_minuend[0] = position_to_goto[0]
+    long_minuend[1] = position_to_goto[1]
+    long_subtrahend[0] = TT_ZERO_OFFSET_LO
+    long_subtrahend[1] = TT_ZERO_OFFSET_HI
+    gosub long_subtract
+    long_minuend[0] = long_result[0]
+    long_minuend[1] = long_result[1]
+    long_subtrahend[0] = tt_180[0]
+    long_subtrahend[1] = tt_180[1]
+    gosub long_subtract
+    if (long_result[1] & $8000) then
+        ; move clockwise
+        long_addend1[0] = position_to_goto[0]
+        long_addend1[1] = position_to_goto[1]
+        long_addend2[0] = tt_180[0]
+        long_addend2[1] = tt_180[1]
+        gosub long_add
+    else
+        ; move countereclockwise
+        long_minuend[0] = position_to_goto[0]
+        long_minuend[1] = position_to_goto[1]
+        long_subtrahend[0] = tt_180[0]
+        long_subtrahend[1] = tt_180[1]
+        gosub long_subtract
+    endif
+    position_to_goto[0] = long_result[0]
+    position_to_goto[1] = long_result[1]
     return
 
 ;=============================================================================
@@ -91,23 +119,9 @@ turntable_goto_position:
 
     if (position_to_goto[0] = TT_180_SW_MARKER_LO) and (position_to_goto[1] = TT_180_SW_MARKER_HI) then
         if (tt_180[0] = $ffff) and (tt_180[1] = $ffff) then return
-        long_minuend[0] = current_tt_loc[0]
-        long_minuend[1] = current_tt_loc[1]
-        long_subtrahend[0] = tt_180[0]
-        long_subtrahend[1] = tt_180[1]
-        gosub long_subtract
-        position_to_goto[0] = long_result[0]
-        position_to_goto[1] = long_result[1]
-        if (long_result[1] & $8000) then
-            ; current_tt_loc is less than 180 degrees, move clockwise
-            long_addend1[0] = current_tt_loc[0]
-            long_addend1[1] = current_tt_loc[1]
-            long_addend2[0] = tt_180[0]
-            long_addend2[1] = tt_180[1]
-            gosub long_add
-            position_to_goto[0] = long_result[0]
-            position_to_goto[1] = long_result[1]
-        endif
+        position_to_goto[0] = current_tt_loc[0]
+        position_to_goto[1] = current_tt_loc[1]
+        gosub turntable_compute_180
     endif
 
     long_minuend[0] = position_to_goto[0]
@@ -331,10 +345,11 @@ turntable_previous_location:
 
 ;=============================================================================
 ; handle_switch_request: a Loconet switch request packet was received
-;   input: loconet_switch
+;   input:  loconet_switch
+;           switch_motor_direction
 ;
 handle_switch_request:
-    ; see if this switch is stored a a preprogrammed stop in EEPROM
+    ; see if this switch is stored in a preprogrammed stop in EEPROM
     gosub turntable_ee_look_up_loconet_switch
     if (tt_ee_switch = loconet_switch) then
         ; loconet_switch found in translate table
@@ -344,6 +359,11 @@ handle_switch_request:
         if operate_mode = MODE_OPERATE then
             position_to_goto[0] = desired_tt_loc[0]
             position_to_goto[1] = desired_tt_loc[1]
+            if (switch_motor_direction = SWITCH_MOTOR_THROWN) then
+                if (tt_180[0] = $ffff) and (tt_180[1] = $ffff) then return
+                ; go to the position 180 degrees from the requested switch location
+                gosub turntable_compute_180
+            endif
             goto turntable_goto_position
         endif
     else
@@ -357,29 +377,6 @@ handle_switch_request:
         endif
     endif
     return
-
-;=============================================================================
-; turntable_set_translation: save a preprogrammed stop in EEPROM
-;   input:  currrent_tt_loc is the current turntable position
-;           loconet_switch the loconet switch number that identifies the stop
-;
-turntable_set_translation:
-    if (loconet_switch = $ffff) or ((current_tt_loc[0] = $ffff) and (current_tt_loc[1] = $ffff)) then return
-    ; see if an existing preprogrammed stop exists corresponding to loconet_switch
-    gosub turntable_ee_look_up_loconet_switch
-    if (tt_stop = MAX_TT_STOPS) then
-        ; EEPROM is full
-        return
-    endif
-    desired_tt_loc[0] = current_tt_loc[0]
-    desired_tt_loc[1] = current_tt_loc[1]
-    tt_ee_switch = loconet_switch
-    tt_ee_position[0] = current_tt_loc[0]
-    tt_ee_position[1] = current_tt_loc[1]
-    ; if an existing stop existed, this will update the stop with the
-    ; current position.  if it didn't exist, this will add the new
-    ; stop to the end of the list
-    goto turntable_ee_write_stop
 
 ;=============================================================================
 turntable_initialize:
