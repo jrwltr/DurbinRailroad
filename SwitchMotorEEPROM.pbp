@@ -4,9 +4,9 @@ TRANSLATE_TABLE_EEPROM_ADDRESS      con 0
     ; switch number.
     ; each entry is 16 bits defined as follows
     ;     $8000     this bit is 1 if the translation is not defined, 0 if it is defined
-    ;     $7c00     5 unused bits
-    ;     $03c0     4 bits to identify the switch controller address (0-15)
-    ;     $0038     3 bits to identify the switch bank within the controller (0-7)
+    ;     $7800     4 unused bits
+    ;     $0780     4 bits to identify the switch controller address (0-15)
+    ;     $0078     4 bits to identify the switch bank within the controller (0-15)
     ;     $0007     3 bits to identify the switch within the bank (0-4)
 
 SWITCH_MOTOR_STATE_EEPROM_ADDRESS   con 1998 ; TRANSLATE_TABLE_EEPROM_ADDRESS + (MAX_LOCONET_SWITCHES * 2)
@@ -42,15 +42,15 @@ switch_eeprom_find_translation:
     ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS + (2 * loconet_switch)
     gosub eeprom_read_word
     switch_not_defined = (ee_word >> 15) & $1
-    switch_address     = (ee_word >>  6) & $f
-    switch_bank        = (ee_word >>  3) & $7
+    switch_address     = (ee_word >>  7) & $f
+    switch_bank        = (ee_word >>  3) & $f
     switch_motor       =  ee_word        & $7
     return
 
 ;=============================================================================
 switch_eeprom_write_translation:
     ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS + (loconet_switch * 2)
-    ee_word = (switch_address << 6) + (switch_bank << 3) + switch_motor
+    ee_word = (switch_address << 7) + (switch_bank << 3) + switch_motor
     goto eeprom_write_word
 
 ;=============================================================================
@@ -58,7 +58,7 @@ switch_eeprom_find_reverse_translation:
     loconet_switch = $ffff
     for ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS to ((MAX_LOCONET_SWITCHES-1) * 2)
         gosub eeprom_read_word
-        if ee_word = (switch_address << 6) + (switch_bank << 3) + switch_motor then
+        if ee_word = (switch_address << 7) + (switch_bank << 3) + switch_motor then
             loconet_switch = (ee_address - TRANSLATE_TABLE_EEPROM_ADDRESS) / 2
             exit
         endif

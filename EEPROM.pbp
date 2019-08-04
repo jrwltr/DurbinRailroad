@@ -84,7 +84,6 @@ eeprom_write_long:
 
 ;=============================================================================
 eeprom_i2c_error:
-#if DO_DISPLAY
     DisplayRow = 1
     DisplayCol = 0
     gosub display_set_cursor
@@ -92,7 +91,6 @@ eeprom_i2c_error:
     gosub display_write_string
     gosub display_clear_to_end_of_line
     pause 2000
-#endif
     return
 
 ;=============================================================================
