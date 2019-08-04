@@ -15,8 +15,8 @@ ee_word         var word
 ;   output: ee_byte - the byte value read from eeprom
 ;
 eeprom_read_byte:
-    I2CWRITE EEPROM_I2C_DATA, EEPROM_I2C_CLK, EEPROM_I2C_ADDRESS, [ ee_address.byte1, ee_address.byte0 ]
-    I2CREAD EEPROM_I2C_DATA, EEPROM_I2C_CLK, EEPROM_I2C_ADDRESS, [ ee_byte ]
+    I2CWRITE EEPROM_I2C_DATA, EEPROM_I2C_CLK, EEPROM_I2C_ADDRESS, [ ee_address.byte1, ee_address.byte0 ], eeprom_i2c_error
+    I2CREAD EEPROM_I2C_DATA, EEPROM_I2C_CLK, EEPROM_I2C_ADDRESS, [ ee_byte ], eeprom_i2c_error
     return
 
 ;=============================================================================
@@ -25,7 +25,7 @@ eeprom_read_byte:
 ;           ee_byte - the byte value to be written to eeprom
 ;
 eeprom_write_byte:
-    I2CWRITE EEPROM_I2C_DATA, EEPROM_I2C_CLK, EEPROM_I2C_ADDRESS, [ ee_address.byte1, ee_address.byte0, ee_byte ]
+    I2CWRITE EEPROM_I2C_DATA, EEPROM_I2C_CLK, EEPROM_I2C_ADDRESS, [ ee_address.byte1, ee_address.byte0, ee_byte ], eeprom_i2c_error
     pause 10
     return
 
@@ -35,8 +35,8 @@ eeprom_write_byte:
 ;           ee_word - the word value read from eeprom
 ;
 eeprom_read_word:
-    I2CWRITE EEPROM_I2C_DATA, EEPROM_I2C_CLK, EEPROM_I2C_ADDRESS, [ ee_address.byte1, ee_address.byte0 ]
-    I2CREAD  EEPROM_I2C_DATA, EEPROM_I2C_CLK, EEPROM_I2C_ADDRESS, [ ee_word.byte1, ee_word.byte0 ]
+    I2CWRITE EEPROM_I2C_DATA, EEPROM_I2C_CLK, EEPROM_I2C_ADDRESS, [ ee_address.byte1, ee_address.byte0 ], eeprom_i2c_error
+    I2CREAD  EEPROM_I2C_DATA, EEPROM_I2C_CLK, EEPROM_I2C_ADDRESS, [ ee_word.byte1, ee_word.byte0 ], eeprom_i2c_error
     return
 
 ;=============================================================================
@@ -45,7 +45,7 @@ eeprom_read_word:
 ;           ee_word - the word value to be written to eeprom
 ;
 eeprom_write_word:
-    I2CWRITE EEPROM_I2C_DATA, EEPROM_I2C_CLK, EEPROM_I2C_ADDRESS, [ ee_address.byte1, ee_address.byte0, ee_word.byte1, ee_word.byte0 ]
+    I2CWRITE EEPROM_I2C_DATA, EEPROM_I2C_CLK, EEPROM_I2C_ADDRESS, [ ee_address.byte1, ee_address.byte0, ee_word.byte1, ee_word.byte0 ], eeprom_i2c_error
     pause 10
     return
 
@@ -61,8 +61,8 @@ ee_long0    var word
 ;           ee_long - the long value read from eeprom
 ;
 eeprom_read_long:
-    I2CWRITE EEPROM_I2C_DATA, EEPROM_I2C_CLK, EEPROM_I2C_ADDRESS, [ ee_address.byte1, ee_address.byte0 ]
-    I2CREAD EEPROM_I2C_DATA, EEPROM_I2C_CLK, EEPROM_I2C_ADDRESS, [ ee_long0.byte1, ee_long0.byte0, ee_long1.byte1, ee_long1.byte0 ]
+    I2CWRITE EEPROM_I2C_DATA, EEPROM_I2C_CLK, EEPROM_I2C_ADDRESS, [ ee_address.byte1, ee_address.byte0 ], eeprom_i2c_error
+    I2CREAD EEPROM_I2C_DATA, EEPROM_I2C_CLK, EEPROM_I2C_ADDRESS, [ ee_long0.byte1, ee_long0.byte0, ee_long1.byte1, ee_long1.byte0 ], eeprom_i2c_error
     ee_long[0] = ee_long0
     ee_long[1] = ee_long1
     return
@@ -76,10 +76,23 @@ eeprom_read_long:
 eeprom_write_long:
     ee_long0 = ee_long[0]
     ee_long1 = ee_long[1]
-    I2CWRITE EEPROM_I2C_DATA, EEPROM_I2C_CLK, EEPROM_I2C_ADDRESS, [ ee_address.byte1, ee_address.byte0, ee_long0.byte1, ee_long0.byte0, ee_long1.byte1, ee_long1.byte0 ]
+    I2CWRITE EEPROM_I2C_DATA, EEPROM_I2C_CLK, EEPROM_I2C_ADDRESS, [ ee_address.byte1, ee_address.byte0, ee_long0.byte1, ee_long0.byte0, ee_long1.byte1, ee_long1.byte0 ], eeprom_i2c_error
     pause 10
     return
 
-;=============================================================================
 #endif
 
+;=============================================================================
+eeprom_i2c_error:
+#if DO_DISPLAY
+    DisplayRow = 1
+    DisplayCol = 0
+    gosub display_set_cursor
+    ARRAYWRITE DisplayString, ["EEPROM Error", 0]
+    gosub display_write_string
+    gosub display_clear_to_end_of_line
+    pause 2000
+#endif
+    return
+
+;=============================================================================
