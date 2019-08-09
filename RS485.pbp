@@ -18,7 +18,7 @@ rs485_tx_len        var byte                      ; number of bytes in rs485_tx_
 rs485_tx_checksum   var byte                      ; checksum accumulation when transmitting a packet
 rs485_tx_sequence   var byte
 rs485_tx_retries    var byte
-    RS485_RETRIES   con 10
+    RS485_RETRIES   con 12  ; this is actual two times the number of retries, it should be even
 
 ;=============================================================================
 #ifdef DEBUG_485_PACKETS
@@ -220,11 +220,6 @@ rs485_receive:
                                 rs485_total_rx_pkts = rs485_total_rx_pkts + 1
                             endif
 #endif
-                            if (rs485_rx_opcode != OPC_ACK) then
-                                ack_address = rs485_rx_packet[1]
-                                ack_sequence = rs485_rx_packet[2]
-                                gosub rs485_send_ACK
-                            endif
                             if (rs485_rx_opcode = OPC_ACK) then
                                 if (rs485_tx_retries and (rs485_tx_data[2] = rs485_tx_sequence)) then
                                     rs485_tx_sequence = rs485_tx_sequence + 1
@@ -246,6 +241,11 @@ rs485_receive:
                                 i2c_read_value = rs485_rx_packet[4]
                                 gosub scan_motor_buttons
 #endif
+                            endif
+                            if (rs485_rx_opcode != OPC_ACK) then
+                                ack_address = rs485_rx_packet[1]
+                                ack_sequence = rs485_rx_packet[2]
+                                gosub rs485_send_ACK
                             endif
                         endif
 #ifdef DEBUG_485_PACKETS
@@ -274,10 +274,8 @@ rs485_receive:
 rs485_retry_check:
     if (rs485_tx_retries != 0) then
         rs485_tx_retries = rs485_tx_retries - 1
-        ; don't retry on the first timer tick, this prevents quick retries if a 
-        ; timer tick happens shortly after transmitting a packet.  it also
-        ; provides a little retry randomness
-        if (rs485_tx_retries < (RS485_RETRIES - 1)) then
+        ; retry on every other timer tick
+        if ((rs485_tx_retries & 1) = 0) then
 #ifdef DEBUG_485_PACKETS
             if (rs485_total_retries < $ff) then
                 rs485_total_retries = rs485_total_retries + 1

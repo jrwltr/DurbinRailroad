@@ -239,7 +239,6 @@ route_eeprom_save:
     goto route_cancel
 
 ;=============================================================================
-#ifdef ERASE_EEPROM
 switch_eeprom_erase:
 
 #ifdef DO_DISPLAY
@@ -269,7 +268,6 @@ switch_eeprom_erase:
         ee_address = ee_address - 2
     next ee_address
     return
-#endif
 
 ;=============================================================================
 

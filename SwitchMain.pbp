@@ -94,7 +94,7 @@ update_display:
         DisplayCol = 0
         gosub display_set_cursor
         if operate_mode = MODE_PROGRAM then
-            ARRAYWRITE DisplayString, ["DEL RTE", 0]
+            ARRAYWRITE DisplayString, ["DEL RTE    ERASE", 0]
             gosub display_write_string
         endif
         gosub display_clear_to_end_of_line
@@ -174,10 +174,6 @@ button_1_pressed:
         goto program_delete_key
     elseif operate_mode = MODE_ROUTE_EDIT then
         goto route_up_key
-#ifdef ERASE_EEPROM
-    elseif operate_mode = MODE_OPERATE then
-        gosub switch_eeprom_erase
-#endif
     endif
     return
 
@@ -219,6 +215,8 @@ button_4_pressed:
 button_4_repeat:
     if operate_mode = MODE_ROUTE_EDIT then
         gosub route_no_key_repeat
+    elseif operate_mode = MODE_PROGRAM then
+        gosub switch_eeprom_erase
     endif
 button_1_repeat:
 button_2_repeat:
