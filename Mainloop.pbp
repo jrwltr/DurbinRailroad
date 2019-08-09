@@ -18,6 +18,10 @@ display_update_needed = 1
 
 
 mainloop:
+    gosub process_interrupts
+    Goto mainloop
+
+process_interrupts:
 #ifdef DO_LOCONET
     ; check to see if any Loconet data has been received
     gosub loconet_receive
@@ -63,8 +67,7 @@ mainloop:
         display_update_needed = 0
     endif
 #endif
-
-    Goto mainloop
+    return
 
 ;=============================================================================
 

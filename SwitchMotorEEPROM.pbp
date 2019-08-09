@@ -79,6 +79,10 @@ switch_eeprom_initialize:
 #ifdef DO_RS485
                 else
                     gosub rs485_send_bank_write_request
+                    do
+                        gosub process_interrupts
+                        gosub rs485_check_tx_complete
+                    loop until rs485_tx_complete = 1
 #endif
                 endif
             endif
