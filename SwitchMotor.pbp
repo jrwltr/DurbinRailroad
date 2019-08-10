@@ -122,8 +122,6 @@ handle_switch_request:
 
 
 ;=============================================================================
-i2c_read_value  var byte    ; last value read from I2C
-
 #ifdef DO_SWITCH_CONTROLLER
 
 switch_index    var byte
@@ -224,9 +222,6 @@ i2c_read_error:
 switch_motor_initialize:
 #ifdef DO_SWITCH_CONTROLLER
     my_address = CONTROLLER_RS485_ADDRESS
-
-    ;write all the switch motor controls to match the values read from eeprom
-    gosub switch_eeprom_initialize
 
     gosub route_initialize
     switch_not_defined = 1

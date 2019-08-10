@@ -34,10 +34,7 @@ switch_address      var word
     CONTROLLER_RS485_ADDRESS   con $f
 
 ;=============================================================================
-#ifdef DO_SWITCH_CONTROLLER
-#ifdef DO_RS485
-rs485_tx_complete   var bit[0]
-#endif
-#endif
+
+i2c_read_value  var byte    ; last value read from I2C
 
 ;=============================================================================

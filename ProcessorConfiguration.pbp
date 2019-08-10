@@ -342,12 +342,10 @@ TMR0L = 0       ; timer 0 counter starts at zero
 T0CON = $46     ; T0CON.TMR0ON = 0 (disable), T0CON.T08BIT = 1 (8 bit counter), T0CON.T0PS<2:0> = 6 (1:128 prescale)
 INTCON.2 = 0    ; INTCON.TMR0IF = 0  clear timer 0 interrupt flag
 INTCON.5 = 1    ; INTCON.TMR0IE = 1  enable timer 0 interrupt
-T0CON.7 = 1     ; T0CON.TMR0ON = 1 (enable)
 #else
 T0CON1 = $6a    ; T0CON1.TOCS<2:0> = HFINTOSC, T0CON1.T0ASYNC = 0, T0CON1.T0CKPS<3:0> = $a (1:1024 prescaler)
 PIR0.5 = 0      ; PIR0.TMR0IF = 0  clear timer 0 interrupt flag
 PIE0.5 = 1      ; PIE0.TMR0IE = 1  enable timer 0 interrupt
-T0CON0 = $80    ; T0CON0.T0EN = 1  enable timer 0
 #endif
 
 #ifdef DO_TURNTABLE
@@ -470,6 +468,18 @@ CLC1CON = $81		; XOR function selected and enabled
 #endif
 
 ;=============================================================================
+goto skip_enable
 
-PERIPHERAL_INTERRUPT_ENABLE = 1
+enable_interrupts:
+#if __PROCESSOR__ = "18F13K22"
+    T0CON.7 = 1     ; T0CON.TMR0ON = 1 enable timer tick
+#else
+    T0CON0 = $80    ; T0CON0.T0EN = 1  enable timer tick
+#endif
+    PERIPHERAL_INTERRUPT_ENABLE = 1
+    GLOBAL_INTERRUPT_ENABLE = 1
+    return
+
+skip_enable:
+;=============================================================================
 

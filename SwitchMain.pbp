@@ -41,11 +41,11 @@ INCLUDE "OnboardSwitches.pbp"
 INCLUDE "LOCONET.inc"
 INCLUDE "SwitchMotor.inc"
 INCLUDE "LOCONET.pbp"
-INCLUDE "SwitchMotorEEPROM.pbp"
-INCLUDE "SwitchMotor.pbp"
 #ifdef DO_RS485
 INCLUDE "RS485.pbp"
 #endif
+INCLUDE "SwitchMotorEEPROM.pbp"
+INCLUDE "SwitchMotor.pbp"
 INCLUDE "SwitchRoutes.pbp"
 
 ;=============================================================================

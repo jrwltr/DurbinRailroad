@@ -79,10 +79,18 @@ switch_eeprom_initialize:
 #ifdef DO_RS485
                 else
                     gosub rs485_send_bank_write_request
-                    do
-                        gosub process_interrupts
-                        gosub rs485_check_tx_complete
-                    loop until rs485_tx_complete = 1
+                    while (rs485_tx_retries)
+                        ; check to see if any RS485 data has been received
+                        gosub rs485_receive
+                        GLOBAL_INTERRUPT_ENABLE = 0
+                        TTI var byte
+                        TTI = TimerTickInterrupt
+                        TimerTickInterrupt = 0
+                        GLOBAL_INTERRUPT_ENABLE = 1
+                        if TTI then
+                            gosub rs485_retry_check
+                        endif
+                    wend
 #endif
                 endif
             endif

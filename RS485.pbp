@@ -290,17 +290,6 @@ rs485_retry_check:
     return
 
 ;=============================================================================
-#ifdef DO_SWITCH_CONTROLLER
-rs485_check_tx_complete:
-    if (rs485_tx_retries = 0) then
-        rs485_tx_complete = 1
-    else
-        rs485_tx_complete = 0
-    endif
-    return
-#endif
-    
-;=============================================================================
 rs485_initialize:
     rs485_rx_state = RX_STATE_WAITING_FOR_OPCODE
     loconet_switch = $ffff

@@ -10,18 +10,17 @@ else
 endif
 #endif
 
-GLOBAL_INTERRUPT_ENABLE = 1
-
 #ifdef DO_DISPLAY
 display_update_needed = 1
 #endif
 
+gosub enable_interrupts
+
+#ifdef DO_SWITCH_CONTROLLER
+    gosub switch_eeprom_initialize
+#endif
 
 mainloop:
-    gosub process_interrupts
-    Goto mainloop
-
-process_interrupts:
 #ifdef DO_LOCONET
     ; check to see if any Loconet data has been received
     gosub loconet_receive
@@ -67,7 +66,8 @@ process_interrupts:
         display_update_needed = 0
     endif
 #endif
-    return
+    Goto mainloop
+
 
 ;=============================================================================
 
