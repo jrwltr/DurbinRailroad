@@ -233,19 +233,20 @@ rs485_receive:
                                 switch_bank = rs485_rx_packet[3]
                                 switch_bank_value = (rs485_rx_packet[4] << 6) + rs485_rx_packet[5]
                                 gosub switch_bank_write
+                                ack_address = rs485_rx_packet[1]
+                                ack_sequence = rs485_rx_packet[2]
+                                gosub rs485_send_ACK
 #endif
 #ifdef DO_SWITCH_CONTROLLER
                             elseif (rs485_rx_opcode = OPC_BANK_BUTTON_STATE) then
+                                ack_address = rs485_rx_packet[1]
+                                ack_sequence = rs485_rx_packet[2]
+                                gosub rs485_send_ACK
                                 switch_address = rs485_rx_packet[1]
                                 switch_bank    = rs485_rx_packet[3]
                                 i2c_read_value = rs485_rx_packet[4]
                                 gosub scan_motor_buttons
 #endif
-                            endif
-                            if (rs485_rx_opcode != OPC_ACK) then
-                                ack_address = rs485_rx_packet[1]
-                                ack_sequence = rs485_rx_packet[2]
-                                gosub rs485_send_ACK
                             endif
                         endif
 #ifdef DEBUG_485_PACKETS

@@ -281,6 +281,8 @@ gosub loconet_initialize
 #ifdef DO_RS485
 gosub rs485_initialize
 #endif
+
+pause 1000  ; pause to let the switch extensions time to power up
 gosub switch_motor_initialize
 
 ;=============================================================================
