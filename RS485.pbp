@@ -221,12 +221,12 @@ rs485_receive:
                             endif
 #endif
                             if (rs485_rx_opcode = OPC_ACK) then
-                                if (rs485_tx_retries and (rs485_tx_data[2] = rs485_tx_sequence)) then
+                                if ((rs485_tx_retries >= 0) and (rs485_tx_data[2] = rs485_tx_sequence)) then
                                     rs485_tx_sequence = rs485_tx_sequence + 1
                                     if (rs485_tx_sequence & $80) then
                                         rs485_tx_sequence = 0
                                     endif
-                                    rs485_tx_retries = 0
+                                    rs485_tx_retries = $ff
                                 endif
 #ifdef DO_SWITCH_EXTENSION
                             elseif (rs485_rx_opcode = OPC_BANK_WRITE) then
@@ -273,19 +273,21 @@ rs485_receive:
 
 ;=============================================================================
 rs485_retry_check:
-    if (rs485_tx_retries != 0) then
+    if (rs485_tx_retries != $ff) then
         rs485_tx_retries = rs485_tx_retries - 1
-        ; retry on every other timer tick
-        if ((rs485_tx_retries & 1) = 0) then
+        if (rs485_tx_retries != $ff) then
+            ; retry on every other timer tick
+            if ((rs485_tx_retries & 1) = 0) then
 #ifdef DEBUG_485_PACKETS
-            if (rs485_total_retries < $ff) then
-                rs485_total_retries = rs485_total_retries + 1
-            endif
-            if ((RS485_RETRIES - rs485_tx_retries) > rs485_max_retries) then
-                rs485_max_retries = RS485_RETRIES - rs485_tx_retries
-            endif
+                if (rs485_total_retries < $ff) then
+                    rs485_total_retries = rs485_total_retries + 1
+                endif
+                if ((RS485_RETRIES - rs485_tx_retries) > rs485_max_retries) then
+                    rs485_max_retries = RS485_RETRIES - rs485_tx_retries
+                endif
 #endif
-            gosub rs485_tx_retry
+                gosub rs485_tx_retry
+            endif
         endif
     endif
     return
@@ -294,6 +296,7 @@ rs485_retry_check:
 rs485_initialize:
     rs485_rx_state = RX_STATE_WAITING_FOR_OPCODE
     loconet_switch = $ffff
+    rs485_tx_retries = $ff
     return
 
 ;=============================================================================

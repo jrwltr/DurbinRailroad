@@ -94,7 +94,7 @@ switch_eeprom_initialize:
 #ifdef DO_RS485
                 else
                     gosub rs485_send_bank_write_request
-                    while (rs485_tx_retries)
+                    while (rs485_tx_retries != $ff)
                         ; check to see if any RS485 data has been received
                         gosub rs485_receive
                         GLOBAL_INTERRUPT_ENABLE = 0
