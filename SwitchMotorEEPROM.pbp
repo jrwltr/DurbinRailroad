@@ -65,10 +65,7 @@ switch_eeprom_write_translation:
     ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS + (loconet_switch * 2)
     gosub switch_eeprom_make_switch_id
     ee_word = switch_id
-    gosub eeprom_write_word
-    ; call switch_eeprom_read_bank to initialize the switch state in EEPROM
-    ; in case it's never been accessed before
-    goto switch_eeprom_read_bank
+    goto eeprom_write_word
 
 ;=============================================================================
 switch_eeprom_find_reverse_translation:
