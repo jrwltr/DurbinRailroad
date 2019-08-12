@@ -151,6 +151,9 @@ scan_motor_buttons:
                         gosub route_eeprom_delete
                     endif
                     gosub switch_eeprom_write_translation
+                    ; call switch_bank_write_from_eeprom to write the switches 
+                    ; in case they haven't been initialized before
+                    gosub switch_bank_write_from_eeprom
                 endif
             endif
 #endif

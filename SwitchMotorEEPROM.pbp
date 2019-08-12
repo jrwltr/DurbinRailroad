@@ -48,17 +48,35 @@ switch_eeprom_find_translation:
     return
 
 ;=============================================================================
+; switch_eeprom_make_switch_id:
+;   set switch_id equal to the value stored in EEPROM that identifies the switch
+;   input:  switch_address
+;           switch_bank
+;           switch_motor
+;   ouput:  switch_id
+;
+switch_id   var word
+switch_eeprom_make_switch_id:
+    switch_id = (switch_address << 7) + (switch_bank << 3) + switch_motor
+    return
+
+;=============================================================================
 switch_eeprom_write_translation:
     ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS + (loconet_switch * 2)
-    ee_word = (switch_address << 7) + (switch_bank << 3) + switch_motor
-    goto eeprom_write_word
+    gosub switch_eeprom_make_switch_id
+    ee_word = switch_id
+    gosub eeprom_write_word
+    ; call switch_eeprom_read_bank to initialize the switch state in EEPROM
+    ; in case it's never been accessed before
+    goto switch_eeprom_read_bank
 
 ;=============================================================================
 switch_eeprom_find_reverse_translation:
     loconet_switch = $ffff
+    gosub switch_eeprom_make_switch_id
     for ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS to ((MAX_LOCONET_SWITCHES-1) * 2)
         gosub eeprom_read_word
-        if ee_word = (switch_address << 7) + (switch_bank << 3) + switch_motor then
+        if ee_word = switch_id then
             loconet_switch = (ee_address - TRANSLATE_TABLE_EEPROM_ADDRESS) / 2
             exit
         endif
