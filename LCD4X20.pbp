@@ -134,6 +134,18 @@ display_set_cursor:
     goto display_write_command4
 
 ;=============================================================================
+; display_error_message: display an error message and wait 2 seconds
+;     input:    DisplayString contains the error message
+display_error_message:
+    DisplayRow = 1
+    DisplayCol = 0
+    gosub display_set_cursor
+    gosub display_write_string
+    gosub display_clear_to_end_of_line
+    pause 2000
+    return
+
+;=============================================================================
 display_initialize:
 
     ;display_row_address contains the address in display memory where each row starts

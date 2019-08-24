@@ -18,7 +18,7 @@ rs485_tx_len        var byte                      ; number of bytes in rs485_tx_
 rs485_tx_checksum   var byte                      ; checksum accumulation when transmitting a packet
 rs485_tx_sequence   var byte
 rs485_tx_retries    var byte
-    RS485_RETRIES   con 12  ; this is actual two times the number of retries, it should be even
+    RS485_RETRIES   con 6 
 
 ;=============================================================================
 #ifdef DEBUG_485_PACKETS
@@ -44,21 +44,15 @@ rs485_display_stats:
 #endif
 
 ;=============================================================================
-ii var byte
-
 rs485_wait_tx_empty:
     while RS485_TXIF = 0
     wend
     return
     
-rs485_transmit:
-#ifdef DEBUG_485_PACKETS
-    if (rs485_total_tx_pkts < $ff) then
-        rs485_total_tx_pkts = rs485_total_tx_pkts + 1
-    endif
-#endif
-    rs485_tx_retries = RS485_RETRIES
-rs485_tx_retry:
+;=============================================================================
+ii var byte
+
+rs485_tx_raw:
     RS485_TXE = 1
     if (rs485_tx_len = 0) then
         rs485_tx_opcode.6 = 0
@@ -126,6 +120,53 @@ rs485_tx_retry:
     return
 
 ;=============================================================================
+; rs485_transmit: send a packet and wait for an acknowledgement
+;
+tick_counter    var byte
+rs485_transmit:
+#ifdef DEBUG_485_PACKETS
+    if (rs485_total_tx_pkts < $ff) then
+        rs485_total_tx_pkts = rs485_total_tx_pkts + 1
+    endif
+#endif
+    rs485_tx_retries = RS485_RETRIES
+    gosub rs485_tx_raw
+    while (rs485_tx_retries != 0)
+        ; check to see if any RS485 data has been received
+        gosub rs485_receive
+        if (rs485_tx_retries != 0) then
+            TTI var byte
+            GLOBAL_INTERRUPT_ENABLE = 0
+            TTI = TimerTickInterrupt
+            TimerTickInterrupt = 0
+            GLOBAL_INTERRUPT_ENABLE = 1
+            if TTI then
+                tick_counter = tick_counter + 1
+                if ((tick_counter & 1) = 0) then ; every other timer tick
+                    rs485_tx_retries = rs485_tx_retries - 1
+                    if (rs485_tx_retries != 0) then
+#ifdef DEBUG_485_PACKETS
+                        if (rs485_total_retries < $ff) then
+                            rs485_total_retries = rs485_total_retries + 1
+                        endif
+                        if ((RS485_RETRIES - rs485_tx_retries) > rs485_max_retries) then
+                            rs485_max_retries = RS485_RETRIES - rs485_tx_retries
+                        endif
+#endif
+                        gosub rs485_tx_raw
+#ifdef DO_DISPLAY
+                    else
+                        ARRAYWRITE DisplayString, ["TX Fail to ", dec rs485_tx_data[0], 0]
+                        gosub display_error_message
+#endif
+                    endif
+                endif
+            endif
+        endif
+    wend
+    return
+
+;=============================================================================
 #ifdef DO_SWITCH_CONTROLLER
 rs485_send_bank_write_request:
     rs485_tx_opcode = OPC_BANK_WRITE
@@ -163,7 +204,7 @@ rs485_send_ACK:
     rs485_tx_data[1] = my_address
     rs485_tx_data[2] = ack_sequence
     rs485_tx_len = 3
-    goto rs485_tx_retry
+    goto rs485_tx_raw
 
 ;=============================================================================
 ; rs485_receive: receive state machine for Loconet packets, called after 
@@ -221,12 +262,12 @@ rs485_receive:
                             endif
 #endif
                             if (rs485_rx_opcode = OPC_ACK) then
-                                if ((rs485_tx_retries >= 0) and (rs485_tx_data[2] = rs485_tx_sequence)) then
+                                if ((rs485_tx_retries > 0) and (rs485_tx_data[2] = rs485_tx_sequence)) then
                                     rs485_tx_sequence = rs485_tx_sequence + 1
                                     if (rs485_tx_sequence & $80) then
                                         rs485_tx_sequence = 0
                                     endif
-                                    rs485_tx_retries = $ff
+                                    rs485_tx_retries = 0
                                 endif
 #ifdef DO_SWITCH_EXTENSION
                             elseif (rs485_rx_opcode = OPC_BANK_WRITE) then
@@ -272,31 +313,9 @@ rs485_receive:
     return
 
 ;=============================================================================
-rs485_retry_check:
-    if (rs485_tx_retries != $ff) then
-        rs485_tx_retries = rs485_tx_retries - 1
-        if (rs485_tx_retries != $ff) then
-            ; retry on every other timer tick
-            if ((rs485_tx_retries & 1) = 0) then
-#ifdef DEBUG_485_PACKETS
-                if (rs485_total_retries < $ff) then
-                    rs485_total_retries = rs485_total_retries + 1
-                endif
-                if ((RS485_RETRIES - rs485_tx_retries) > rs485_max_retries) then
-                    rs485_max_retries = RS485_RETRIES - rs485_tx_retries
-                endif
-#endif
-                gosub rs485_tx_retry
-            endif
-        endif
-    endif
-    return
-
-;=============================================================================
 rs485_initialize:
     rs485_rx_state = RX_STATE_WAITING_FOR_OPCODE
     loconet_switch = $ffff
-    rs485_tx_retries = $ff
     return
 
 ;=============================================================================

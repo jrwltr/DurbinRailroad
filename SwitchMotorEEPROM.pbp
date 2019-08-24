@@ -94,18 +94,6 @@ switch_eeprom_initialize:
 #ifdef DO_RS485
                 else
                     gosub rs485_send_bank_write_request
-                    while (rs485_tx_retries != $ff)
-                        ; check to see if any RS485 data has been received
-                        gosub rs485_receive
-                        GLOBAL_INTERRUPT_ENABLE = 0
-                        TTI var byte
-                        TTI = TimerTickInterrupt
-                        TimerTickInterrupt = 0
-                        GLOBAL_INTERRUPT_ENABLE = 1
-                        if TTI then
-                            gosub rs485_retry_check
-                        endif
-                    wend
 #endif
                 endif
             endif
@@ -239,7 +227,7 @@ route_eeprom_save:
     if (route_found = ROUTE_NOT_FOUND) then
         if route_num_routes = MAX_ROUTES then
             ARRAYWRITE DisplayString, ["Too many routes", 0]
-            goto route_error
+            goto display_error_message
         endif
         route_num_routes = route_num_routes + 1
     endif

@@ -15,16 +15,6 @@ route_delete_switch:
     return
 
 ;=============================================================================
-route_error:
-    DisplayRow = 1
-    DisplayCol = 0
-    gosub display_set_cursor
-    gosub display_write_string
-    gosub display_clear_to_end_of_line
-    pause 2000
-    return
-
-;=============================================================================
 route_activate:
     if route_num_switches != 0 then
         kk var byte

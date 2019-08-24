@@ -64,7 +64,7 @@ handle_switch_request:
             else
                 ARRAYWRITE DisplayString, ["Switch undefined", 0]
             endif
-            goto route_error
+            goto display_error_message
         else
             ;find loconet_switch in current route
             route_switch_index = $ff
@@ -83,7 +83,7 @@ handle_switch_request:
                 ; loconet_switch not found in current route, add switch to route
                 if route_num_switches >= MAX_ROUTE_SWITCHES then 
                     ARRAYWRITE DisplayString, ["Too many switches", 0]
-                    goto route_error
+                    goto display_error_message
                 endif
                 route_switch_index = route_num_switches
                 route_num_switches = route_num_switches + 1

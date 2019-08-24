@@ -37,9 +37,6 @@ mainloop:
     TimerTickInterrupt = 0
     GLOBAL_INTERRUPT_ENABLE = 1
     if InterruptState then
-#ifdef DO_RS485
-        gosub rs485_retry_check
-#endif
 #ifdef DO_SWITCHMOTOR
         gosub switch_motor_button_check
 #endif
