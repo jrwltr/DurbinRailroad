@@ -19,9 +19,10 @@ INCLUDE "Interrupt.pbp"
 
 ;=============================================================================
 operate_mode        var byte
-    MODE_OPERATE    con 0
-    MODE_PROGRAM    con 1
-    MODE_MOVING     con 2
+    MODE_OPERATE        con 0
+    MODE_PROGRAM        con 1
+    MODE_ENTERSWITCH    con 2
+    MODE_MOVING         con 3
 
 loconet_switch      var word
 
@@ -33,6 +34,7 @@ button3_state       var byte
     BUTTON3_CAL_180         con 2
     BUTTON3_SET_180_SWITCH  con 3
     BUTTON3_ERASE_EEPROM    con 4
+    BUTTON3_ENTER_SWITCH    con 5
 
 button3_repeated   var bit[0]
 
@@ -85,7 +87,7 @@ update_display:
 
     gosub display_clear_to_end_of_line
 
-    gosub display_operate_program
+    gosub display_mode
 
     DisplayRow = 1
     DisplayCol = 0
@@ -109,10 +111,14 @@ update_display:
             ARRAYWRITE DisplayString, ["180SW ", 0]
         elseif (button3_state = BUTTON3_ERASE_EEPROM) then
             ARRAYWRITE DisplayString, ["ERASE ", 0]
+        elseif (button3_state = BUTTON3_ENTER_SWITCH) then
+            ARRAYWRITE DisplayString, ["SWTCH ", 0]
         endif
 
         gosub display_write_string
         ARRAYWRITE DisplayString, ["FNC", 0]
+    elseif operate_mode = MODE_ENTERSWITCH then
+        ARRAYWRITE DisplayString, ["UP  DWN  DONE", 0]
     elseif operate_mode = MODE_MOVING then
         ARRAYWRITE DisplayString, ["Moving", 0]
     endif
@@ -127,13 +133,15 @@ operate_program_flash:
     ARRAYWRITE DisplayString, [" ", 0]
     goto display_write_string
     pause 400
-display_operate_program:
+display_mode:
     DisplayCol = DISPLAY_COLUMNS-1
     gosub display_set_cursor
     if operate_mode = MODE_OPERATE then
         ARRAYWRITE DisplayString, ["O", 0]
     elseif operate_mode = MODE_PROGRAM then
         ARRAYWRITE DisplayString, ["P", 0]
+    elseif operate_mode = MODE_ENTERSWITCH then
+        ARRAYWRITE DisplayString, ["S", 0]
     endif
     goto display_write_string
 
@@ -158,6 +166,69 @@ operate_switch_off:
     endif
     return
 
+;=============================================================================
+MAX_LOCONET_SWITCH  con 998
+key_repeats var byte
+    REPEATS_BEFORE_COUNT_BY_10  con  9
+    REPEATS_BEFORE_COUNT_BY_100 con 19
+
+increment_loconet_switch:
+        if (key_repeats = REPEATS_BEFORE_COUNT_BY_100) then
+            if (loconet_switch < MAX_LOCONET_SWITCH-100) then
+                loconet_switch = loconet_switch + 100
+                loconet_switch = loconet_switch / 100
+                loconet_switch = loconet_switch * 100
+            elseif (loconet_switch < MAX_LOCONET_SWITCH-10) then
+                goto increment_by_10
+            else
+                goto increment_by_1
+            endif
+        else
+            key_repeats = key_repeats + 1
+            if (key_repeats > REPEATS_BEFORE_COUNT_BY_10) then
+                if (loconet_switch < MAX_LOCONET_SWITCH-10) then
+increment_by_10:
+                    loconet_switch = loconet_switch + 10
+                    loconet_switch = loconet_switch / 10
+                    loconet_switch = loconet_switch * 10
+                endif
+            else
+increment_by_1:
+                if (loconet_switch < MAX_LOCONET_SWITCH) then
+                    loconet_switch = loconet_switch + 1
+                endif
+            endif
+        endif
+        goto handle_switch_request
+
+decrement_loconet_switch:
+        if (key_repeats = REPEATS_BEFORE_COUNT_BY_100) then
+            if (loconet_switch >= 100) then
+                loconet_switch = loconet_switch - 100
+                loconet_switch = loconet_switch / 100
+                loconet_switch = loconet_switch * 100
+            elseif (loconet_switch >= 10) then
+                goto decrement_by_10
+            else
+                goto decrement_by_1
+            endif
+        else
+            key_repeats = key_repeats + 1
+            if (key_repeats > REPEATS_BEFORE_COUNT_BY_10) then
+                if (loconet_switch >= 10) then
+decrement_by_10:
+                    loconet_switch = loconet_switch - 10
+                    loconet_switch = loconet_switch / 10
+                    loconet_switch = loconet_switch * 10
+                endif
+            else
+decrement_by_1:
+                if (loconet_switch > 0) then
+                    loconet_switch = loconet_switch - 1
+                endif
+            endif
+        endif
+        goto handle_switch_request
 
 ;=============================================================================
 button_1_pressed:
@@ -165,7 +236,10 @@ button_1_pressed:
 operate_up_key:
         gosub turntable_previous_location
     elseif operate_mode = MODE_PROGRAM then
-        gosub turntable_clockwise
+        goto turntable_clockwise
+    elseif operate_mode = MODE_ENTERSWITCH then
+        key_repeats = 0
+        goto increment_loconet_switch
     elseif operate_mode = MODE_MOVING then
         goto turntable_stop
     endif
@@ -174,9 +248,12 @@ operate_up_key:
 button_2_pressed:
     if operate_mode = MODE_OPERATE then
 operate_down_key:
-        gosub turntable_next_location
+        goto turntable_next_location
     elseif operate_mode = MODE_PROGRAM then
-        gosub turntable_counterclockwise
+        goto turntable_counterclockwise
+    elseif operate_mode = MODE_ENTERSWITCH then
+        key_repeats = 0
+        goto decrement_loconet_switch
     elseif operate_mode = MODE_MOVING then
         goto turntable_stop
     endif
@@ -190,9 +267,8 @@ button_3_pressed:
         goto turntable_goto_position
     elseif operate_mode = MODE_MOVING then
         goto turntable_stop
-    else
-        return
     endif
+    return
 
 button_4_pressed:
     if operate_mode = MODE_OPERATE then
@@ -201,7 +277,7 @@ button_4_pressed:
         gosub turntable_goto_position
     elseif operate_mode = MODE_PROGRAM then
         button3_state = button3_state + 1
-        if (button3_state > BUTTON3_ERASE_EEPROM) then
+        if (button3_state > BUTTON3_ENTER_SWITCH) then
             button3_state = BUTTON3_SET_SWITCH
         endif
     elseif operate_mode = MODE_MOVING then
@@ -213,12 +289,17 @@ button_4_pressed:
 button_1_repeat:
     if operate_mode = MODE_OPERATE then
         goto operate_up_key
+    elseif operate_mode = MODE_ENTERSWITCH then
+        goto increment_loconet_switch
     endif
     goto button_cancel_repeat
 
 button_2_repeat:
     if operate_mode = MODE_OPERATE then
         goto operate_down_key
+    elseif operate_mode = MODE_ENTERSWITCH then
+        goto decrement_loconet_switch
+        return
     endif
     goto button_cancel_repeat
 
@@ -265,7 +346,11 @@ button_3_released:
                 gosub turntable_erase_eeprom
                 gosub turntable_initialize
             endif
+        elseif (button3_state = BUTTON3_ENTER_SWITCH) then
+            operate_mode = MODE_ENTERSWITCH
         endif
+    elseif operate_mode = MODE_ENTERSWITCH then
+        operate_mode = MODE_PROGRAM
     endif
     return
 
