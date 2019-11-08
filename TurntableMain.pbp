@@ -167,68 +167,84 @@ operate_switch_off:
     return
 
 ;=============================================================================
-MAX_LOCONET_SWITCH  con 998
+MAX_LOCONET_SWITCH  con 999
 key_repeats var byte
     REPEATS_BEFORE_COUNT_BY_10  con  9
     REPEATS_BEFORE_COUNT_BY_100 con 19
 
 increment_loconet_switch:
-        if (key_repeats = REPEATS_BEFORE_COUNT_BY_100) then
-            if (loconet_switch < MAX_LOCONET_SWITCH-100) then
-                loconet_switch = loconet_switch + 100
-                loconet_switch = loconet_switch / 100
-                loconet_switch = loconet_switch * 100
-            elseif (loconet_switch < MAX_LOCONET_SWITCH-10) then
-                goto increment_by_10
+    if loconet_switch = $ffff then
+        loconet_switch = 0
+        return
+    endif
+    loconet_switch = loconet_switch + 1
+    if (key_repeats = REPEATS_BEFORE_COUNT_BY_100) then
+        if (loconet_switch < MAX_LOCONET_SWITCH-100) then
+            loconet_switch = loconet_switch + 100
+            loconet_switch = loconet_switch / 100
+            loconet_switch = loconet_switch * 100
+        elseif (loconet_switch < MAX_LOCONET_SWITCH-10) then
+            goto increment_by_10
+        else
+            goto increment_by_1
+        endif
+    else
+        key_repeats = key_repeats + 1
+        if (key_repeats > REPEATS_BEFORE_COUNT_BY_10) then
+            if (loconet_switch < MAX_LOCONET_SWITCH-10) then
+increment_by_10:
+                loconet_switch = loconet_switch + 10
+                loconet_switch = loconet_switch / 10
+                loconet_switch = loconet_switch * 10
             else
                 goto increment_by_1
             endif
         else
-            key_repeats = key_repeats + 1
-            if (key_repeats > REPEATS_BEFORE_COUNT_BY_10) then
-                if (loconet_switch < MAX_LOCONET_SWITCH-10) then
-increment_by_10:
-                    loconet_switch = loconet_switch + 10
-                    loconet_switch = loconet_switch / 10
-                    loconet_switch = loconet_switch * 10
-                endif
-            else
 increment_by_1:
-                if (loconet_switch < MAX_LOCONET_SWITCH) then
-                    loconet_switch = loconet_switch + 1
-                endif
+            if (loconet_switch < MAX_LOCONET_SWITCH) then
+                loconet_switch = loconet_switch + 1
             endif
         endif
-        goto handle_switch_request
+    endif
+    loconet_switch = loconet_switch - 1
+    goto handle_switch_request
 
 decrement_loconet_switch:
-        if (key_repeats = REPEATS_BEFORE_COUNT_BY_100) then
-            if (loconet_switch >= 100) then
-                loconet_switch = loconet_switch - 100
-                loconet_switch = loconet_switch / 100
-                loconet_switch = loconet_switch * 100
-            elseif (loconet_switch >= 10) then
-                goto decrement_by_10
+    if loconet_switch = $ffff then
+        loconet_switch = MAX_LOCONET_SWITCH - 1
+        return
+    endif
+    loconet_switch = loconet_switch + 1
+    if (key_repeats = REPEATS_BEFORE_COUNT_BY_100) then
+        if (loconet_switch > 101) then
+            loconet_switch = loconet_switch - 100
+            loconet_switch = loconet_switch / 100
+            loconet_switch = loconet_switch * 100
+        elseif (loconet_switch > 11) then
+            goto decrement_by_10
+        else
+            goto decrement_by_1
+        endif
+    else
+        key_repeats = key_repeats + 1
+        if (key_repeats > REPEATS_BEFORE_COUNT_BY_10) then
+            if (loconet_switch > 11) then
+decrement_by_10:
+                loconet_switch = loconet_switch - 10
+                loconet_switch = loconet_switch / 10
+                loconet_switch = loconet_switch * 10
             else
                 goto decrement_by_1
             endif
         else
-            key_repeats = key_repeats + 1
-            if (key_repeats > REPEATS_BEFORE_COUNT_BY_10) then
-                if (loconet_switch >= 10) then
-decrement_by_10:
-                    loconet_switch = loconet_switch - 10
-                    loconet_switch = loconet_switch / 10
-                    loconet_switch = loconet_switch * 10
-                endif
-            else
 decrement_by_1:
-                if (loconet_switch > 0) then
-                    loconet_switch = loconet_switch - 1
-                endif
+            if (loconet_switch > 1) then
+                loconet_switch = loconet_switch - 1
             endif
         endif
-        goto handle_switch_request
+    endif
+    loconet_switch = loconet_switch - 1
+    goto handle_switch_request
 
 ;=============================================================================
 button_1_pressed:
