@@ -21,6 +21,9 @@ NUM_LOCAL_SWITCH_BANKS  con 16  ; I2C_INTERFACE_COUNT * BANKS_PER_INTERFACE
 ;=============================================================================
 MAX_LOCONET_SWITCHES    con 999
 
+FIRST_LOCONET_IO_SWITCH con 900
+    ; all switch numbers above FIRST_LOCONET_IO_SWITCH are 8 bit I/O banks
+
 ;=============================================================================
 my_address      var byte
 
@@ -38,3 +41,8 @@ switch_address      var word
 i2c_read_value  var byte    ; last value read from I2C
 
 ;=============================================================================
+IS_IO_BANK  con $8000
+    ; used to differentiate between switch banks and I/O banks
+
+;=============================================================================
+

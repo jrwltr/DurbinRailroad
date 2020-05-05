@@ -7,7 +7,7 @@ TRANSLATE_TABLE_EEPROM_ADDRESS      con 0
     ;     $7800     4 unused bits
     ;     $0780     4 bits to identify the switch controller address (0-15)
     ;     $0078     4 bits to identify the switch bank within the controller (0-15)
-    ;     $0007     3 bits to identify the switch within the bank (0-4)
+    ;     $0007     3 bits to identify the switch within the bank (0-4 for switch banks, 0-7 for I/O banks)
 
 SWITCH_MOTOR_STATE_EEPROM_ADDRESS   con 1998 ; TRANSLATE_TABLE_EEPROM_ADDRESS + (MAX_LOCONET_SWITCHES * 2)
     ; the switch motor state table contains one 16 bit entry for each possible switch bank in the system
@@ -107,32 +107,44 @@ switch_motor_state  var byte
 
 switch_eeprom_read_bank:
     ee_address = SWITCH_MOTOR_STATE_EEPROM_ADDRESS + (((switch_address << 4) + switch_bank) * 2)
-    gosub eeprom_read_word
-    if ee_word = $ffff then
-        ; looks like an erased eeprom, initialize all switches to closed
-        ee_word = $5555
-        gosub eeprom_write_word
-    endif
-    return
+    goto eeprom_read_word
 
 switch_eeprom_read_switch_state:
     gosub switch_eeprom_read_bank
-    if (((ee_word >> (switch_motor * 2)) & 3) = 1) then
-        switch_motor_state = SWITCH_MOTOR_CLOSED
+    if (ee_word & IS_IO_BANK) then
+        if (ee_word (1 << switch_motor)) then
+            switch_motor_state = SWITCH_MOTOR_CLOSED
+        else
+            switch_motor_state = SWITCH_MOTOR_THROWN
+        endif
     else
-        switch_motor_state = SWITCH_MOTOR_THROWN
+        if (((ee_word >> (switch_motor * 2)) & 3) = 1) then
+            switch_motor_state = SWITCH_MOTOR_CLOSED
+        else
+            switch_motor_state = SWITCH_MOTOR_THROWN
+        endif
     endif
     return
 
 ;=============================================================================
 switch_eeprom_write_switch_state:
     gosub switch_eeprom_read_bank
-    if switch_motor_state = SWITCH_MOTOR_THROWN then
-        ee_word = (ee_word & ~(3 << (switch_motor * 2))) | (2 << (switch_motor * 2))
-    elseif switch_motor_state = SWITCH_MOTOR_CLOSED then
-        ee_word = (ee_word & ~(3 << (switch_motor * 2))) | (1 << (switch_motor * 2))
-    elseif switch_motor_state = SWITCH_MOTOR_TOGGLE then
-        ee_word =  ee_word ^  (3 << (switch_motor * 2))
+    if (ee_word & IS_IO_BANK) then
+        if switch_motor_state = SWITCH_MOTOR_THROWN then
+            ee_word = ee_word |  (1 << switch_motor )
+        elseif switch_motor_state = SWITCH_MOTOR_CLOSED then
+            ee_word = ee_word & ~(1 << switch_motor)
+        elseif switch_motor_state = SWITCH_MOTOR_TOGGLE then
+            ee_word =  ee_word ^ (1 << switch_motor)
+        endif
+    else
+        if switch_motor_state = SWITCH_MOTOR_THROWN then
+            ee_word = (ee_word & ~(3 << (switch_motor * 2))) | (2 << (switch_motor * 2))
+        elseif switch_motor_state = SWITCH_MOTOR_CLOSED then
+            ee_word = (ee_word & ~(3 << (switch_motor * 2))) | (1 << (switch_motor * 2))
+        elseif switch_motor_state = SWITCH_MOTOR_TOGGLE then
+            ee_word =  ee_word ^  (3 << (switch_motor * 2))
+        endif
     endif
     goto eeprom_write_word
 
