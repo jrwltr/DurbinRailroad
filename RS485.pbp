@@ -287,8 +287,7 @@ rs485_receive:
                                 gosub rs485_send_ACK
                                 switch_address = rs485_rx_packet[1]
                                 switch_bank    = rs485_rx_packet[3]
-                                i2c_read_value = rs485_rx_packet[4]
-                                i2c_read_value = rs485_rx_packet[5]
+                                i2c_read_value = rs485_rx_packet[4] + (rs485_rx_packet[5] << 7)
                                 gosub scan_motor_buttons
 #endif
                             endif
