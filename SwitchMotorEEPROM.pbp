@@ -77,6 +77,14 @@ switch_eeprom_make_switch_id:
 ;=============================================================================
 switch_eeprom_write_translation:
     ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS + (loconet_switch * 2)
+    gosub eeprom_read_word
+    if ee_word != $ffff then
+        ee_address = REVERSE_TRANSLATE_TABLE_EEPROM_ADDRESS + (ee_word * 2)
+        ee_word = $ffff
+        gosub eeprom_write_word
+    endif
+
+    ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS + (loconet_switch * 2)
     gosub switch_eeprom_make_switch_id
     ee_word = switch_id
     gosub eeprom_write_word
@@ -97,38 +105,11 @@ switch_eeprom_find_reverse_translation:
 #ifdef DO_SWITCH_CONTROLLER
 switch_eeprom_initialize:
 
-#ifdef FIX_EEPROM
-    gosub display_clear
-    DisplayRow = 0
-    DisplayCol = 0
-    gosub display_set_cursor
-    ARRAYWRITE DisplayString, ["Delaying", 0]
-    gosub display_write_string
-    pause 5000
-    gosub display_clear
-    DisplayRow = 0
-    DisplayCol = 0
-    gosub display_set_cursor
-    ARRAYWRITE DisplayString, ["Fixing EEPROM", 0]
-    gosub display_write_string
-    display_update_needed = 1
-#endif
-
     for switch_address = 0 to NUMBER_EXTENSION_PROCESSORS-1
         for switch_bank = 0 to NUM_LOCAL_SWITCH_BANKS-1
             ee_address = SWITCH_MOTOR_STATE_EEPROM_ADDRESS + (((switch_address << 4) + switch_bank) * 2)
             gosub eeprom_read_word
             if ee_word != $ffff then
-
-#ifdef FIX_EEPROM
-                ;reformat state table
-                if (ee_word & $8000) then
-                    ee_word = IS_IO_BANK | (ee_word << 8)
-                else
-                    ee_word = ee_word << 6
-                endif
-                gosub eeprom_write_word
-#endif
 
                 switch_bank_value = ee_word
                 if switch_address = my_address then
@@ -141,35 +122,6 @@ switch_eeprom_initialize:
             endif
         next switch_bank
     next switch_address
-
-#ifdef FIX_EEPROM
-    ; make sure the reverse translate table is initialized from the forward
-    ; translate table.  This should only need to be done the first time this
-    ; code is run when the translate table exists but the reverse translate 
-    ; table doesn't
-    for loconet_switch = 0 to (MAX_LOCONET_SWITCHES-1)
-        ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS + (loconet_switch * 2)
-        gosub eeprom_read_word
-        if (ee_word < MAX_SWITCHES) then
-
-            ;fix translate table value for not shift by 3
-            save_sw var    word
-            save_sw = ee_word
-            ee_address = SWITCH_MOTOR_STATE_EEPROM_ADDRESS + ((ee_word & $fff8) * 2)
-            gosub eeprom_read_word
-            if (!(ee_word & IS_IO_BANK)) then
-                save_sw = save_sw + 3
-                ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS + (loconet_switch * 2)
-                ee_word = save_sw
-                gosub eeprom_write_word
-            endif
-
-            ee_address = REVERSE_TRANSLATE_TABLE_EEPROM_ADDRESS + (save_sw * 2)
-            ee_word = loconet_switch
-            gosub eeprom_write_word
-        endif
-    next loconet_switch
-#endif
 
     return
 #endif
