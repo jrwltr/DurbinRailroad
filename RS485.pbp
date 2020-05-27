@@ -175,9 +175,10 @@ rs485_send_bank_write_request:
     rs485_tx_data[2] = rs485_tx_sequence
     rs485_tx_data[3] = switch_bank
     ; can't allow data values with high bit set, except opcodes
-    rs485_tx_data[4] = (switch_bank_value >> 6) & $f
-    rs485_tx_data[5] = switch_bank_value & $3f
-    rs485_tx_len = 6
+    rs485_tx_data[4] = (switch_bank_value >> 14) & $03
+    rs485_tx_data[5] = (switch_bank_value >>  7) & $7f
+    rs485_tx_data[6] =  switch_bank_value        & $7f
+    rs485_tx_len = 7
     goto rs485_transmit
 #endif
 
@@ -189,8 +190,9 @@ rs485_send_bank_button_state:
     rs485_tx_data[1] = my_address
     rs485_tx_data[2] = rs485_tx_sequence
     rs485_tx_data[3] = switch_bank
-    rs485_tx_data[4] = i2c_read_value & $1f
-    rs485_tx_len = 5
+    rs485_tx_data[4] = i2c_read_value & $7f
+    rs485_tx_data[5] = (i2c_read_value & $80) >> 7
+    rs485_tx_len = 6
     goto rs485_transmit
 #endif
 
@@ -272,7 +274,7 @@ rs485_receive:
 #ifdef DO_SWITCH_EXTENSION
                             elseif (rs485_rx_opcode = OPC_BANK_WRITE) then
                                 switch_bank = rs485_rx_packet[3]
-                                switch_bank_value = (rs485_rx_packet[4] << 6) + rs485_rx_packet[5]
+                                switch_bank_value = (rs485_rx_packet[4] << 14) + (rs485_rx_packet[5] << 7) + rs485_rx_packet[6]
                                 gosub switch_bank_write
                                 ack_address = rs485_rx_packet[1]
                                 ack_sequence = rs485_rx_packet[2]
@@ -286,6 +288,7 @@ rs485_receive:
                                 switch_address = rs485_rx_packet[1]
                                 switch_bank    = rs485_rx_packet[3]
                                 i2c_read_value = rs485_rx_packet[4]
+                                i2c_read_value = rs485_rx_packet[5]
                                 gosub scan_motor_buttons
 #endif
                             endif

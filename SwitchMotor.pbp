@@ -26,12 +26,17 @@ switch_bank_write_from_eeprom:
 bval var byte
 switch_bank_write:
     i2c_addr = PCF8574_I2C_ADDRESS + ((switch_bank // BANKS_PER_INTERFACE) << 1)
-    bval = switch_bank_value & $ff
     if (switch_bank / BANKS_PER_INTERFACE) = 0 then
-        I2CWRITE SW0_INTERFACE_I2C_DATA, SW0_INTERFACE_I2C_CLK, i2c_addr, [ bval ], i2c_write_error
-        bval = ((switch_bank_value >> 8) & $3) | $fc
-        i2c_addr = i2c_addr - PCF8574_I2C_ADDRESS + PCF8574A_I2C_ADDRESS 
-        I2CWRITE SW0_INTERFACE_I2C_DATA, SW0_INTERFACE_I2C_CLK, i2c_addr, [ bval ], i2c_write_error
+        if (switch_bank_value & IS_IO_BANK) then
+            bval = switch_bank_value >> 8
+            I2CWRITE SW0_INTERFACE_I2C_DATA, SW0_INTERFACE_I2C_CLK, i2c_addr, [ bval ], i2c_write_error
+        else
+            bval = (switch_bank_value >> 6) & $ff
+            I2CWRITE SW0_INTERFACE_I2C_DATA, SW0_INTERFACE_I2C_CLK, i2c_addr, [ bval ], i2c_write_error
+            bval = ((switch_bank_value >> 14) & $3) | $fc
+            i2c_addr = i2c_addr - PCF8574_I2C_ADDRESS + PCF8574A_I2C_ADDRESS 
+            I2CWRITE SW0_INTERFACE_I2C_DATA, SW0_INTERFACE_I2C_CLK, i2c_addr, [ bval ], i2c_write_error
+        endif
     else
 #ifdef DO_SWITCH_EXTENSION
 #ifdef DO_DISPLAY
@@ -41,10 +46,16 @@ switch_bank_write:
         endif
 #endif
 #endif
-        I2CWRITE SW1_INTERFACE_I2C_DATA, SW1_INTERFACE_I2C_CLK, i2c_addr, [ bval ], i2c_write_error
-        bval = ((switch_bank_value >> 8) & $3) | $fc
-        i2c_addr = i2c_addr - PCF8574_I2C_ADDRESS + PCF8574A_I2C_ADDRESS 
-        I2CWRITE SW1_INTERFACE_I2C_DATA, SW1_INTERFACE_I2C_CLK, i2c_addr, [ bval ], i2c_write_error
+        if (switch_bank_value & IS_IO_BANK) then
+            bval = switch_bank_value >> 8
+            I2CWRITE SW1_INTERFACE_I2C_DATA, SW1_INTERFACE_I2C_CLK, i2c_addr, [ bval ], i2c_write_error
+        else
+            bval = (switch_bank_value >> 6) & $ff
+            I2CWRITE SW1_INTERFACE_I2C_DATA, SW1_INTERFACE_I2C_CLK, i2c_addr, [ bval ], i2c_write_error
+            bval = ((switch_bank_value >> 14) & $3) | $fc
+            i2c_addr = i2c_addr - PCF8574_I2C_ADDRESS + PCF8574A_I2C_ADDRESS 
+            I2CWRITE SW1_INTERFACE_I2C_DATA, SW1_INTERFACE_I2C_CLK, i2c_addr, [ bval ], i2c_write_error
+        endif
     endif
 i2c_write_error:
     return
@@ -127,11 +138,18 @@ handle_switch_request:
 switch_index    var byte
 
 scan_motor_buttons:
-    for switch_index = 0 to SWITCH_MOTORS_PER_BANK-1
+    gosub switch_eeprom_read_bank
+    if (ee_word & IS_IO_BANK) then
+        switch_index = 0
+    else
+        switch_index = 3
+    endif
+    for switch_index = switch_index to 7
         sm  var byte
         sm = (switch_address * SWITCH_MOTOR_COUNT) + ((switch_bank * SWITCH_MOTORS_PER_BANK) + switch_index)
         ; if the button is pushed
         if (i2c_read_value & (1 << switch_index)) then
+
 #ifdef DO_DISPLAY
             display_update_needed = 1
 #endif
@@ -141,9 +159,12 @@ scan_motor_buttons:
             switch_motor = switch_index
 #ifdef DO_OPERATE_PROGRAM
             if operate_mode == MODE_OPERATE then
-                switch_motor_state = SWITCH_MOTOR_TOGGLE
-                gosub switch_eeprom_write_switch_state
-                gosub switch_bank_write_from_eeprom
+                gosub switch_eeprom_find_reverse_translation
+                if loconet_switch != $ffff then
+                    switch_motor_state = SWITCH_MOTOR_TOGGLE
+                    gosub switch_eeprom_write_switch_state
+                    gosub switch_bank_write_from_eeprom
+                endif
             elseif operate_mode == MODE_PROGRAM then
                 if loconet_switch != $ffff then
                     if route_number != ROUTE_NOT_FOUND then
@@ -153,6 +174,16 @@ scan_motor_buttons:
                     gosub switch_eeprom_write_translation
                     ; call switch_bank_write_from_eeprom to write the switches 
                     ; in case they haven't been initialized before
+                    gosub switch_eeprom_read_bank
+                    if (ee_word = $ffff) or ((loconet_switch >= FIRST_LOCONET_IO_SWITCH) and ((ee_word & IS_IO_BANK) = 0))  or ((loconet_switch < FIRST_LOCONET_IO_SWITCH) and (ee_word & IS_IO_BANK)) then
+                        ; looks like an erased eeprom, initialize all switches to closed
+                        if (loconet_switch < FIRST_LOCONET_IO_SWITCH) then
+                            ee_word = $5540
+                        else
+                            ee_word = $ff00 | IS_IO_BANK
+                        endif
+                        gosub eeprom_write_word
+                    endif
                     gosub switch_bank_write_from_eeprom
                 endif
             endif
@@ -197,7 +228,7 @@ switch_motor_button_check:
 #endif
                     I2CREAD SW1_INTERFACE_I2C_DATA, SW1_INTERFACE_I2C_CLK, i2c_addr, [ i2c_read_value ], i2c_read_error
                 endif
-                i2c_read_value = (~i2c_read_value >> 3) & $1f
+                i2c_read_value = ~i2c_read_value
 #ifdef DO_SWITCH_EXTENSION
                 ; if any button is pushed
                 if i2c_read_value then

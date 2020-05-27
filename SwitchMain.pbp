@@ -68,6 +68,7 @@ update_display:
                     ARRAYWRITE DisplayString, ["=?", 0]
                 else
                     gosub switch_eeprom_read_switch_state
+;????display "T" and "C" don't work from CAB
                     if switch_motor_state = SWITCH_MOTOR_THROWN then
                         ARRAYWRITE DisplayString, ["=T", 0]
                     else

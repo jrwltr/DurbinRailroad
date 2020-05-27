@@ -7,7 +7,7 @@ TRANSLATE_TABLE_EEPROM_ADDRESS      con 0
     ;     $7800     4 unused bits
     ;     $0780     4 bits to identify the switch controller address (0-15)
     ;     $0078     4 bits to identify the switch bank within the controller (0-15)
-    ;     $0007     3 bits to identify the switch within the bank (0-4)
+    ;     $0007     3 bits to identify the switch within the bank (0-4 for switch banks, 0-7 for I/O banks)
 
 SWITCH_MOTOR_STATE_EEPROM_ADDRESS   con 1998 ; TRANSLATE_TABLE_EEPROM_ADDRESS + (MAX_LOCONET_SWITCHES * 2)
     ; the switch motor state table contains one 16 bit entry for each possible switch bank in the system
@@ -27,12 +27,26 @@ ROUTE_TABLE_EEPROM_ADDRESS          con 2510 ;SWITCH_MOTOR_STATE_EEPROM_ADDRESS+
     ;       ...
     ;   switch id MAX_ROUTE_SWITCHES     word
 
+REVERSE_TRANSLATE_TABLE_EEPROM_ADDRESS  con 6610  ;ROUTE_TABE_EEPROM_ADDRESS + ROUTE_TABLE_SIZE
+    ; the Reverse Translate table contains MAX_SWITCHES entries, one for each possible switch
+    ; in the system
+
 ;=============================================================================
 route_num_routes    var byte
 
 ;=============================================================================
 switch_eeprom_delete_translation:
     switch_not_defined = 1
+
+    ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS + (loconet_switch * 2)
+    gosub eeprom_read_word
+
+    if (ee_word < MAX_SWITCHES) then
+        ee_address = REVERSE_TRANSLATE_TABLE_EEPROM_ADDRESS + (ee_word * 2)
+        ee_word = $ffff
+        gosub eeprom_write_word
+    endif
+
     ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS + (loconet_switch * 2)
     ee_word = $ffff
     goto eeprom_write_word
@@ -65,29 +79,57 @@ switch_eeprom_write_translation:
     ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS + (loconet_switch * 2)
     gosub switch_eeprom_make_switch_id
     ee_word = switch_id
+    gosub eeprom_write_word
+
+    ee_address = REVERSE_TRANSLATE_TABLE_EEPROM_ADDRESS + (switch_id * 2)
+    ee_word = loconet_switch
     goto eeprom_write_word
 
 ;=============================================================================
 switch_eeprom_find_reverse_translation:
-    loconet_switch = $ffff
     gosub switch_eeprom_make_switch_id
-    for ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS to ((MAX_LOCONET_SWITCHES-1) * 2)
-        gosub eeprom_read_word
-        if ee_word = switch_id then
-            loconet_switch = (ee_address - TRANSLATE_TABLE_EEPROM_ADDRESS) / 2
-            exit
-        endif
-    next ee_address
+    ee_address = REVERSE_TRANSLATE_TABLE_EEPROM_ADDRESS + (switch_id * 2)
+    gosub eeprom_read_word
+    loconet_switch = ee_word
     return
 
 ;=============================================================================
 #ifdef DO_SWITCH_CONTROLLER
 switch_eeprom_initialize:
+
+#ifdef FIX_EEPROM
+    gosub display_clear
+    DisplayRow = 0
+    DisplayCol = 0
+    gosub display_set_cursor
+    ARRAYWRITE DisplayString, ["Delaying", 0]
+    gosub display_write_string
+    pause 5000
+    gosub display_clear
+    DisplayRow = 0
+    DisplayCol = 0
+    gosub display_set_cursor
+    ARRAYWRITE DisplayString, ["Fixing EEPROM", 0]
+    gosub display_write_string
+    display_update_needed = 1
+#endif
+
     for switch_address = 0 to NUMBER_EXTENSION_PROCESSORS-1
         for switch_bank = 0 to NUM_LOCAL_SWITCH_BANKS-1
             ee_address = SWITCH_MOTOR_STATE_EEPROM_ADDRESS + (((switch_address << 4) + switch_bank) * 2)
             gosub eeprom_read_word
             if ee_word != $ffff then
+
+#ifdef FIX_EEPROM
+                ;reformat state table
+                if (ee_word & $8000) then
+                    ee_word = IS_IO_BANK | (ee_word << 8)
+                else
+                    ee_word = ee_word << 6
+                endif
+                gosub eeprom_write_word
+#endif
+
                 switch_bank_value = ee_word
                 if switch_address = my_address then
                     gosub switch_bank_write
@@ -99,6 +141,36 @@ switch_eeprom_initialize:
             endif
         next switch_bank
     next switch_address
+
+#ifdef FIX_EEPROM
+    ; make sure the reverse translate table is initialized from the forward
+    ; translate table.  This should only need to be done the first time this
+    ; code is run when the translate table exists but the reverse translate 
+    ; table doesn't
+    for loconet_switch = 0 to (MAX_LOCONET_SWITCHES-1)
+        ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS + (loconet_switch * 2)
+        gosub eeprom_read_word
+        if (ee_word < MAX_SWITCHES) then
+
+            ;fix translate table value for not shift by 3
+            save_sw var    word
+            save_sw = ee_word
+            ee_address = SWITCH_MOTOR_STATE_EEPROM_ADDRESS + ((ee_word & $fff8) * 2)
+            gosub eeprom_read_word
+            if (!(ee_word & IS_IO_BANK)) then
+                save_sw = save_sw + 3
+                ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS + (loconet_switch * 2)
+                ee_word = save_sw
+                gosub eeprom_write_word
+            endif
+
+            ee_address = REVERSE_TRANSLATE_TABLE_EEPROM_ADDRESS + (save_sw * 2)
+            ee_word = loconet_switch
+            gosub eeprom_write_word
+        endif
+    next loconet_switch
+#endif
+
     return
 #endif
 
@@ -107,32 +179,47 @@ switch_motor_state  var byte
 
 switch_eeprom_read_bank:
     ee_address = SWITCH_MOTOR_STATE_EEPROM_ADDRESS + (((switch_address << 4) + switch_bank) * 2)
-    gosub eeprom_read_word
-    if ee_word = $ffff then
-        ; looks like an erased eeprom, initialize all switches to closed
-        ee_word = $5555
-        gosub eeprom_write_word
-    endif
-    return
+    goto eeprom_read_word
 
 switch_eeprom_read_switch_state:
     gosub switch_eeprom_read_bank
-    if (((ee_word >> (switch_motor * 2)) & 3) = 1) then
-        switch_motor_state = SWITCH_MOTOR_CLOSED
+    if (ee_word & IS_IO_BANK) then
+        if (ee_word & ($0100 << switch_motor)) then
+            switch_motor_state = SWITCH_MOTOR_CLOSED
+        else
+            switch_motor_state = SWITCH_MOTOR_THROWN
+        endif
     else
-        switch_motor_state = SWITCH_MOTOR_THROWN
+        if (((ee_word >> (switch_motor * 2)) & 3) = 1) then
+            switch_motor_state = SWITCH_MOTOR_CLOSED
+        else
+            switch_motor_state = SWITCH_MOTOR_THROWN
+        endif
     endif
     return
 
 ;=============================================================================
+sw_mask    var word
 switch_eeprom_write_switch_state:
     gosub switch_eeprom_read_bank
-    if switch_motor_state = SWITCH_MOTOR_THROWN then
-        ee_word = (ee_word & ~(3 << (switch_motor * 2))) | (2 << (switch_motor * 2))
-    elseif switch_motor_state = SWITCH_MOTOR_CLOSED then
-        ee_word = (ee_word & ~(3 << (switch_motor * 2))) | (1 << (switch_motor * 2))
-    elseif switch_motor_state = SWITCH_MOTOR_TOGGLE then
-        ee_word =  ee_word ^  (3 << (switch_motor * 2))
+    if (ee_word & IS_IO_BANK) then
+        sw_mask = $0100 << switch_motor
+        if switch_motor_state = SWITCH_MOTOR_THROWN then
+            ee_word = ee_word |  sw_mask
+        elseif switch_motor_state = SWITCH_MOTOR_CLOSED then
+            ee_word = ee_word & ~sw_mask
+        elseif switch_motor_state = SWITCH_MOTOR_TOGGLE then
+            ee_word =  ee_word ^ sw_mask
+        endif
+    else
+        sw_mask = (3 << (switch_motor * 2))
+        if switch_motor_state = SWITCH_MOTOR_THROWN then
+            ee_word = (ee_word & ~sw_mask) | (2 << (switch_motor * 2))
+        elseif switch_motor_state = SWITCH_MOTOR_CLOSED then
+            ee_word = (ee_word & ~sw_mask) | (1 << (switch_motor * 2))
+        elseif switch_motor_state = SWITCH_MOTOR_TOGGLE then
+            ee_word =  ee_word ^  sw_mask
+        endif
     endif
     goto eeprom_write_word
 
@@ -278,6 +365,12 @@ switch_eeprom_erase:
         gosub eeprom_write_word
         ee_address = ee_address - 2
     next ee_address
+
+    ee_word = $ffff
+    for ee_address = REVERSE_TRANSLATE_TABLE_EEPROM_ADDRESS to (REVERSE_TRANSLATE_TABLE_EEPROM_ADDRESS + (MAX_SWITCHES * 2 ) - 2) step 2
+        gosub eeprom_write_word
+    next ee_address
+
     return
 
 ;=============================================================================

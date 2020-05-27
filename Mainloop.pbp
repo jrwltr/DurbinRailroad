@@ -17,6 +17,8 @@ display_update_needed = 1
 gosub enable_interrupts
 
 #ifdef DO_SWITCH_CONTROLLER
+    ; delay a second to make sure all 485 switch extensions are powered up
+    pause 1000
     gosub switch_eeprom_initialize
 #endif
 
