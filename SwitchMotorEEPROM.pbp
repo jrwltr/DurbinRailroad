@@ -36,8 +36,6 @@ route_num_routes    var byte
 
 ;=============================================================================
 switch_eeprom_delete_translation:
-    switch_not_defined = 1
-
     ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS + (loconet_switch * 2)
     gosub eeprom_read_word
 
@@ -76,13 +74,7 @@ switch_eeprom_make_switch_id:
 
 ;=============================================================================
 switch_eeprom_write_translation:
-    ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS + (loconet_switch * 2)
-    gosub eeprom_read_word
-    if ee_word != $ffff then
-        ee_address = REVERSE_TRANSLATE_TABLE_EEPROM_ADDRESS + (ee_word * 2)
-        ee_word = $ffff
-        gosub eeprom_write_word
-    endif
+    gosub switch_eeprom_delete_translation
 
     ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS + (loconet_switch * 2)
     gosub switch_eeprom_make_switch_id
@@ -137,9 +129,9 @@ switch_eeprom_read_switch_state:
     gosub switch_eeprom_read_bank
     if (ee_word & IS_IO_BANK) then
         if (ee_word & ($0100 << switch_motor)) then
-            switch_motor_state = SWITCH_MOTOR_CLOSED
-        else
             switch_motor_state = SWITCH_MOTOR_THROWN
+        else
+            switch_motor_state = SWITCH_MOTOR_CLOSED
         endif
     else
         if (((ee_word >> (switch_motor * 2)) & 3) = 1) then
@@ -166,9 +158,9 @@ switch_eeprom_write_switch_state:
     else
         sw_mask = (3 << (switch_motor * 2))
         if switch_motor_state = SWITCH_MOTOR_THROWN then
-            ee_word = (ee_word & ~sw_mask) | (2 << (switch_motor * 2))
-        elseif switch_motor_state = SWITCH_MOTOR_CLOSED then
             ee_word = (ee_word & ~sw_mask) | (1 << (switch_motor * 2))
+        elseif switch_motor_state = SWITCH_MOTOR_CLOSED then
+            ee_word = (ee_word & ~sw_mask) | (2 << (switch_motor * 2))
         elseif switch_motor_state = SWITCH_MOTOR_TOGGLE then
             ee_word =  ee_word ^  sw_mask
         endif
@@ -302,15 +294,15 @@ switch_eeprom_erase:
 #endif
 
     ee_word = $ffff
-    for ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS to (SWITCH_MOTOR_STATE_EEPROM_ADDRESS-2) step 2
+
+    for ee_address = TRANSLATE_TABLE_EEPROM_ADDRESS to (TRANSLATE_TABLE_EEPROM_ADDRESS+((MAX_LOCONET_SWITCHES-1)*2)) step 2
         gosub eeprom_write_word
     next ee_address
 
-    for ee_address = SWITCH_MOTOR_STATE_EEPROM_ADDRESS to (ROUTE_TABLE_EEPROM_ADDRESS-2) step 2
+    for ee_address = SWITCH_MOTOR_STATE_EEPROM_ADDRESS to (SWITCH_MOTOR_STATE_EEPROM_ADDRESS+((MAX_SWITCH_BANKS-1)*2)) step 2
         gosub eeprom_write_word
     next ee_address
 
-    ee_word = $ffff
     for ee_address = ROUTE_TABLE_EEPROM_ADDRESS to (ROUTE_TABLE_EEPROM_ADDRESS + ROUTE_TABLE_SIZE - ROUTE_STORAGE_SIZE) step ROUTE_STORAGE_SIZE
         gosub eeprom_write_word
         ee_address = ee_address + 2
@@ -318,8 +310,7 @@ switch_eeprom_erase:
         ee_address = ee_address - 2
     next ee_address
 
-    ee_word = $ffff
-    for ee_address = REVERSE_TRANSLATE_TABLE_EEPROM_ADDRESS to (REVERSE_TRANSLATE_TABLE_EEPROM_ADDRESS + (MAX_SWITCHES * 2 ) - 2) step 2
+    for ee_address = REVERSE_TRANSLATE_TABLE_EEPROM_ADDRESS to (REVERSE_TRANSLATE_TABLE_EEPROM_ADDRESS+((MAX_SWITCHES-1)*2)) step 2
         gosub eeprom_write_word
     next ee_address
 

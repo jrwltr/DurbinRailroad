@@ -15,11 +15,6 @@ MAX_SWITCHES                con 2048 ; MAX_SWITCH_BANKS * (8 bits per bank)
 NUM_LOCAL_SWITCH_BANKS  con 16  ; I2C_INTERFACE_COUNT * BANKS_PER_INTERFACE
 
 ;=============================================================================
-#ifdef DO_SWITCH_EXTENSION
-    last_motor_bank_state var byte[NUM_LOCAL_SWITCH_BANKS]
-#endif
-
-;=============================================================================
 MAX_LOCONET_SWITCHES    con 999
 
 FIRST_LOCONET_IO_SWITCH con 899

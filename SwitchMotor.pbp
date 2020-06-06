@@ -9,6 +9,10 @@ interface_debounce    var byte[I2C_INTERFACE_COUNT]
 ;=============================================================================
 i2c_addr        var byte
 
+#ifdef DO_SWITCH_EXTENSION
+bank_is_io  var word
+#endif
+
 ;=============================================================================
 #ifdef DO_SWITCH_CONTROLLER
 switch_bank_write_from_eeprom:
@@ -25,6 +29,13 @@ switch_bank_write_from_eeprom:
 ;=============================================================================
 bval var byte
 switch_bank_write:
+#ifdef DO_SWITCH_EXTENSION
+    if (switch_bank_value & IS_IO_BANK) then
+        bank_is_io = bank_is_io |  (1 << switch_bank)
+    else
+        bank_is_io = bank_is_io & ~(1 << switch_bank)
+    endif
+#endif
     i2c_addr = PCF8574_I2C_ADDRESS + ((switch_bank // BANKS_PER_INTERFACE) << 1)
     if (switch_bank / BANKS_PER_INTERFACE) = 0 then
         if (switch_bank_value & IS_IO_BANK) then
@@ -202,6 +213,10 @@ interface_index var byte
 bank_index      var byte
 debounce        var byte
 
+#ifdef DO_SWITCH_EXTENSION
+last_motor_bank_state var byte[NUM_LOCAL_SWITCH_BANKS]
+#endif
+
 switch_motor_button_check:
     for interface_index = 0 to I2C_INTERFACE_COUNT-1
         debounce = interface_debounce[interface_index] << 1
@@ -228,20 +243,25 @@ switch_motor_button_check:
 #endif
                     I2CREAD SW1_INTERFACE_I2C_DATA, SW1_INTERFACE_I2C_CLK, i2c_addr, [ i2c_read_value ], i2c_read_error
                 endif
-                i2c_read_value = ~i2c_read_value
 #ifdef DO_SWITCH_EXTENSION
+                switch_bank = (interface_index * BANKS_PER_INTERFACE) + bank_index
+                if (bank_is_io & (1 << switch_bank)) then
+                    i2c_read_value =  ~i2c_read_value
+                else
+                    i2c_read_value = (~i2c_read_value) & $f8
+                endif
                 ; if any button is pushed
                 if i2c_read_value then
                     led_to_change = LED_SWITCHMOTOR_BUTTON
                     gosub led_flash
                     ; if any button changed state
-                    switch_bank = (interface_index * BANKS_PER_INTERFACE) + bank_index
                     if last_motor_bank_state[switch_bank] != i2c_read_value then
                         gosub rs485_send_bank_button_state
                     endif
                 endif
                 last_motor_bank_state[switch_bank] = i2c_read_value
 #else
+                i2c_read_value = ~i2c_read_value
                 switch_bank = (interface_index * BANKS_PER_INTERFACE) + bank_index
                 switch_address = my_address
                 gosub scan_motor_buttons
