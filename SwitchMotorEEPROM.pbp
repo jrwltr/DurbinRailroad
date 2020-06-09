@@ -129,9 +129,9 @@ switch_eeprom_read_switch_state:
     gosub switch_eeprom_read_bank
     if (ee_word & IS_IO_BANK) then
         if (ee_word & ($0100 << switch_motor)) then
-            switch_motor_state = SWITCH_MOTOR_THROWN
-        else
             switch_motor_state = SWITCH_MOTOR_CLOSED
+        else
+            switch_motor_state = SWITCH_MOTOR_THROWN
         endif
     else
         if (((ee_word >> (switch_motor * 2)) & 3) = 1) then
@@ -149,18 +149,18 @@ switch_eeprom_write_switch_state:
     if (ee_word & IS_IO_BANK) then
         sw_mask = $0100 << switch_motor
         if switch_motor_state = SWITCH_MOTOR_THROWN then
-            ee_word = ee_word |  sw_mask
-        elseif switch_motor_state = SWITCH_MOTOR_CLOSED then
             ee_word = ee_word & ~sw_mask
+        elseif switch_motor_state = SWITCH_MOTOR_CLOSED then
+            ee_word = ee_word |  sw_mask
         elseif switch_motor_state = SWITCH_MOTOR_TOGGLE then
             ee_word =  ee_word ^ sw_mask
         endif
     else
         sw_mask = (3 << (switch_motor * 2))
         if switch_motor_state = SWITCH_MOTOR_THROWN then
-            ee_word = (ee_word & ~sw_mask) | (1 << (switch_motor * 2))
-        elseif switch_motor_state = SWITCH_MOTOR_CLOSED then
             ee_word = (ee_word & ~sw_mask) | (2 << (switch_motor * 2))
+        elseif switch_motor_state = SWITCH_MOTOR_CLOSED then
+            ee_word = (ee_word & ~sw_mask) | (1 << (switch_motor * 2))
         elseif switch_motor_state = SWITCH_MOTOR_TOGGLE then
             ee_word =  ee_word ^  sw_mask
         endif
